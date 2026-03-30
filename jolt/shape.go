@@ -249,3 +249,57 @@ func (ts *TransformedShape) CastRay(ray RRayCast, result *RayCastResult) bool {
 	}
 	return false
 }
+
+// --- HeightField + Compound Shapes (T-0104) ---
+
+// CreateHeightField creates a heightfield collision shape from a grid of height samples.
+// samples: row-major float array of height values (sampleCount x sampleCount)
+// sampleCount: number of samples per side (must be power of 2)
+// scale: scale factors for the heightfield
+// Returns nil if arguments are invalid.
+func CreateHeightField(samples []float32, sampleCount int, scale Vec3) *Shape {
+	if len(samples) == 0 || sampleCount < 2 || len(samples) != sampleCount*sampleCount {
+		return nil
+	}
+	handle := C.JoltCreateHeightField(
+		(*C.float)(&samples[0]),
+		C.int(sampleCount),
+		C.float(scale.X), C.float(scale.Y), C.float(scale.Z),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Shape{handle: handle}
+}
+
+// CreateStaticCompound creates a compound shape from multiple sub-shapes with transforms.
+// shapes: sub-shapes to combine
+// positions: position of each sub-shape
+// rotations: rotation quaternion of each sub-shape
+// Returns nil if arguments are invalid or array lengths don't match.
+func CreateStaticCompound(shapes []*Shape, positions []Vec3, rotations []Quat) *Shape {
+	n := len(shapes)
+	if n == 0 || len(positions) != n || len(rotations) != n {
+		return nil
+	}
+
+	cShapes := make([]C.JoltShape, n)
+	cPos := make([]C.float, n*3)
+	cRot := make([]C.float, n*4)
+	for i := range n {
+		cShapes[i] = shapes[i].handle
+		cPos[i*3] = C.float(positions[i].X)
+		cPos[i*3+1] = C.float(positions[i].Y)
+		cPos[i*3+2] = C.float(positions[i].Z)
+		cRot[i*4] = C.float(rotations[i].X)
+		cRot[i*4+1] = C.float(rotations[i].Y)
+		cRot[i*4+2] = C.float(rotations[i].Z)
+		cRot[i*4+3] = C.float(rotations[i].W)
+	}
+
+	handle := C.JoltCreateStaticCompound(&cShapes[0], &cPos[0], &cRot[0], C.int(n))
+	if handle == nil {
+		return nil
+	}
+	return &Shape{handle: handle}
+}

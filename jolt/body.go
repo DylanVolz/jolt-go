@@ -122,3 +122,86 @@ func (bi *BodyInterface) SetShape(bodyID *BodyID, shape *Shape, updateMassProper
 	}
 	C.JoltSetBodyShape(bi.handle, bodyID.handle, shape.handle, update)
 }
+
+// --- Extended Body API (T-0102) ---
+
+// GetLinearVelocity returns the current linear velocity of a body
+func (bi *BodyInterface) GetLinearVelocity(bodyID *BodyID) Vec3 {
+	var x, y, z C.float
+	C.JoltGetLinearVelocity(bi.handle, bodyID.handle, &x, &y, &z)
+	return Vec3{X: float32(x), Y: float32(y), Z: float32(z)}
+}
+
+// SetLinearVelocity sets the linear velocity of a body
+func (bi *BodyInterface) SetLinearVelocity(bodyID *BodyID, velocity Vec3) {
+	C.JoltSetLinearVelocity(bi.handle, bodyID.handle,
+		C.float(velocity.X), C.float(velocity.Y), C.float(velocity.Z))
+}
+
+// GetAngularVelocity returns the current angular velocity of a body
+func (bi *BodyInterface) GetAngularVelocity(bodyID *BodyID) Vec3 {
+	var x, y, z C.float
+	C.JoltGetAngularVelocity(bi.handle, bodyID.handle, &x, &y, &z)
+	return Vec3{X: float32(x), Y: float32(y), Z: float32(z)}
+}
+
+// SetAngularVelocity sets the angular velocity of a body
+func (bi *BodyInterface) SetAngularVelocity(bodyID *BodyID, velocity Vec3) {
+	C.JoltSetAngularVelocity(bi.handle, bodyID.handle,
+		C.float(velocity.X), C.float(velocity.Y), C.float(velocity.Z))
+}
+
+// AddImpulse applies an instantaneous velocity change to a body
+func (bi *BodyInterface) AddImpulse(bodyID *BodyID, impulse Vec3) {
+	C.JoltAddImpulse(bi.handle, bodyID.handle,
+		C.float(impulse.X), C.float(impulse.Y), C.float(impulse.Z))
+}
+
+// SetFriction sets the surface friction coefficient of a body
+func (bi *BodyInterface) SetFriction(bodyID *BodyID, friction float32) {
+	C.JoltSetFriction(bi.handle, bodyID.handle, C.float(friction))
+}
+
+// SetRestitution sets the bounciness (elasticity) of a body
+func (bi *BodyInterface) SetRestitution(bodyID *BodyID, restitution float32) {
+	C.JoltSetRestitution(bi.handle, bodyID.handle, C.float(restitution))
+}
+
+// SetLinearDamping sets the linear damping on a body (requires body lock via PhysicsSystem)
+func (ps *PhysicsSystem) SetLinearDamping(bodyID *BodyID, damping float32) {
+	C.JoltSetLinearDamping(ps.handle, bodyID.handle, C.float(damping))
+}
+
+// SetAngularDamping sets the angular damping on a body (requires body lock via PhysicsSystem)
+func (ps *PhysicsSystem) SetAngularDamping(bodyID *BodyID, damping float32) {
+	C.JoltSetAngularDamping(ps.handle, bodyID.handle, C.float(damping))
+}
+
+// SetGravityFactor sets the gravity factor for a body (0 = no gravity, 1 = normal)
+func (bi *BodyInterface) SetGravityFactor(bodyID *BodyID, factor float32) {
+	C.JoltSetGravityFactor(bi.handle, bodyID.handle, C.float(factor))
+}
+
+// GetRotation returns the current rotation quaternion of a body
+func (bi *BodyInterface) GetRotation(bodyID *BodyID) Quat {
+	var x, y, z, w C.float
+	C.JoltGetRotation(bi.handle, bodyID.handle, &x, &y, &z, &w)
+	return Quat{X: float32(x), Y: float32(y), Z: float32(z), W: float32(w)}
+}
+
+// SetRotation sets the rotation of a body
+func (bi *BodyInterface) SetRotation(bodyID *BodyID, rotation Quat) {
+	C.JoltSetRotation(bi.handle, bodyID.handle,
+		C.float(rotation.X), C.float(rotation.Y), C.float(rotation.Z), C.float(rotation.W))
+}
+
+// IsActive returns whether a body is currently active in the simulation
+func (bi *BodyInterface) IsActive(bodyID *BodyID) bool {
+	return C.JoltIsBodyActive(bi.handle, bodyID.handle) != 0
+}
+
+// RemoveAndDestroyBody removes a body from the simulation and frees it.
+// Do NOT call bodyID.Destroy() after this — the body ID is already freed.
+func (bi *BodyInterface) RemoveAndDestroyBody(bodyID *BodyID) {
+	C.JoltRemoveAndDestroyBody(bi.handle, bodyID.handle)
+}

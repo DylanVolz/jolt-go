@@ -26,19 +26,41 @@ void JoltPhysicsSystemUpdate(JoltPhysicsSystem system, float deltaTime);
 #ifdef __cplusplus
 }
 
-// C++ only: Accessor functions for wrapper internals (used by character.cpp)
+// C++ only: Accessor functions for wrapper internals
+#include <memory>
+
 namespace JPH {
     class PhysicsSystem;
+    class BroadPhaseLayerInterface;
     class ObjectVsBroadPhaseLayerFilter;
     class ObjectLayerPairFilter;
+    class ContactListener;
 }
 
-struct PhysicsSystemWrapper;  // Opaque forward declaration
+// Forward declaration for contact listener implementation
+class ContactListenerImpl;
+
+// Wrapper to keep layer interfaces alive (PhysicsSystem stores references to them)
+struct PhysicsSystemWrapper
+{
+    std::unique_ptr<JPH::PhysicsSystem> system;
+    std::unique_ptr<JPH::BroadPhaseLayerInterface> broad_phase_layer_interface;
+    std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter> object_vs_broadphase_layer_filter;
+    std::unique_ptr<JPH::ObjectLayerPairFilter> object_vs_object_layer_filter;
+
+    // Optional: contact event listener (T-0103)
+    ContactListenerImpl* contact_listener = nullptr;
+
+    ~PhysicsSystemWrapper();
+};
 
 // Accessor functions
 JPH::PhysicsSystem* GetPhysicsSystem(PhysicsSystemWrapper* wrapper);
 const JPH::ObjectVsBroadPhaseLayerFilter* GetObjectVsBroadPhaseLayerFilter(PhysicsSystemWrapper* wrapper);
 const JPH::ObjectLayerPairFilter* GetObjectLayerPairFilter(PhysicsSystemWrapper* wrapper);
+
+// Defined in layers.cpp where ContactListenerImpl is complete
+void DestroyContactListener(ContactListenerImpl* listener);
 
 #endif
 

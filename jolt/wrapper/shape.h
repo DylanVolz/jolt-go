@@ -61,6 +61,26 @@ int JoltTransformedShapeCastRay(JoltTransformedShape transformedShape,
                                  float directionX, float directionY, float directionZ,
                                  float* outFraction);
 
+// --- HeightField + Compound Shapes (T-0104) ---
+
+// Create a heightfield collision shape from a row-major float array
+// samples: height values (sampleCount x sampleCount)
+// sampleCount: number of samples per side (must be power of 2)
+// Returns NULL on failure
+JoltShape JoltCreateHeightField(const float* samples, int sampleCount,
+                                float scaleX, float scaleY, float scaleZ);
+
+// Create a static compound shape from multiple sub-shapes with transforms
+// shapes: array of JoltShape handles
+// positions: interleaved float array (3 floats per shape: x,y,z)
+// rotations: interleaved float array (4 floats per shape: x,y,z,w quaternion)
+// count: number of sub-shapes
+// Returns NULL on failure
+JoltShape JoltCreateStaticCompound(const JoltShape* shapes,
+                                   const float* positions,
+                                   const float* rotations,
+                                   int count);
+
 #ifdef __cplusplus
 }
 #endif

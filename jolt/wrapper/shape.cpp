@@ -9,6 +9,8 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
@@ -175,4 +177,45 @@ int JoltTransformedShapeCastRay(JoltTransformedShape transformedShape,
 	}
 
 	return 0; // No hit
+}
+
+// --- HeightField + Compound Shapes (T-0104) ---
+
+JoltShape JoltCreateHeightField(const float* samples, int sampleCount,
+                                float scaleX, float scaleY, float scaleZ)
+{
+	if (!samples || sampleCount < 2) return nullptr;
+
+	HeightFieldShapeSettings settings(samples, Vec3::sZero(),
+	                                  Vec3(scaleX, scaleY, scaleZ), sampleCount);
+	ShapeSettings::ShapeResult result = settings.Create();
+	if (result.HasError()) return nullptr;
+
+	ShapeRefC shape = result.Get();
+	shape->AddRef();
+	return static_cast<JoltShape>(const_cast<Shape*>(shape.GetPtr()));
+}
+
+JoltShape JoltCreateStaticCompound(const JoltShape* shapes,
+                                   const float* positions,
+                                   const float* rotations,
+                                   int count)
+{
+	if (!shapes || !positions || !rotations || count <= 0) return nullptr;
+
+	StaticCompoundShapeSettings settings;
+	for (int i = 0; i < count; i++)
+	{
+		const Shape* s = static_cast<const Shape*>(shapes[i]);
+		Vec3 pos(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+		Quat rot(rotations[i * 4], rotations[i * 4 + 1], rotations[i * 4 + 2], rotations[i * 4 + 3]);
+		settings.AddShape(pos, rot, s);
+	}
+
+	ShapeSettings::ShapeResult result = settings.Create();
+	if (result.HasError()) return nullptr;
+
+	ShapeRefC shape = result.Get();
+	shape->AddRef();
+	return static_cast<JoltShape>(const_cast<Shape*>(shape.GetPtr()));
 }

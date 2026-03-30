@@ -109,16 +109,11 @@ public:
 	}
 };
 
-// Wrapper to keep layer interfaces alive (PhysicsSystem stores references to them)
-struct PhysicsSystemWrapper
+// PhysicsSystemWrapper destructor — clean up contact listener if set
+PhysicsSystemWrapper::~PhysicsSystemWrapper()
 {
-	std::unique_ptr<PhysicsSystem> system;
-	std::unique_ptr<BPLayerInterfaceImpl> broad_phase_layer_interface;
-	std::unique_ptr<ObjectVsBroadPhaseLayerFilterImpl> object_vs_broadphase_layer_filter;
-	std::unique_ptr<ObjectLayerPairFilterImpl> object_vs_object_layer_filter;
-
-	~PhysicsSystemWrapper() = default;
-};
+	DestroyContactListener(contact_listener);
+}
 
 JoltPhysicsSystem JoltCreatePhysicsSystem()
 {
@@ -131,7 +126,7 @@ JoltPhysicsSystem JoltCreatePhysicsSystem()
 	// Create wrapper to hold PhysicsSystem and layer interfaces
 	auto wrapper = std::make_unique<PhysicsSystemWrapper>();
 
-	// Create layer interfaces using smart pointers
+	// Create layer interfaces using smart pointers (concrete types assigned to base-class unique_ptrs)
 	wrapper->broad_phase_layer_interface = std::make_unique<BPLayerInterfaceImpl>();
 	wrapper->object_vs_broadphase_layer_filter = std::make_unique<ObjectVsBroadPhaseLayerFilterImpl>();
 	wrapper->object_vs_object_layer_filter = std::make_unique<ObjectLayerPairFilterImpl>();

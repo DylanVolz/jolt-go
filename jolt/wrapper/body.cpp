@@ -9,6 +9,8 @@
 #include <Jolt/Physics/Body/Body.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/MotionProperties.h>
 #include <memory>
 
 using namespace JPH;
@@ -139,5 +141,136 @@ void JoltSetBodyShape(JoltBodyInterface bodyInterface,
 void JoltDestroyBodyID(JoltBodyID bodyID)
 {
 	BodyID *bid = static_cast<BodyID *>(bodyID);
+	delete bid;
+}
+
+// --- Extended Body API (T-0102) ---
+
+void JoltGetLinearVelocity(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                           float* x, float* y, float* z)
+{
+	const BodyInterface *bi = static_cast<const BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	Vec3 vel = bi->GetLinearVelocity(*bid);
+	*x = vel.GetX();
+	*y = vel.GetY();
+	*z = vel.GetZ();
+}
+
+void JoltSetLinearVelocity(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                           float x, float y, float z)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetLinearVelocity(*bid, Vec3(x, y, z));
+}
+
+void JoltGetAngularVelocity(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                            float* x, float* y, float* z)
+{
+	const BodyInterface *bi = static_cast<const BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	Vec3 vel = bi->GetAngularVelocity(*bid);
+	*x = vel.GetX();
+	*y = vel.GetY();
+	*z = vel.GetZ();
+}
+
+void JoltSetAngularVelocity(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                            float x, float y, float z)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetAngularVelocity(*bid, Vec3(x, y, z));
+}
+
+void JoltAddImpulse(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                    float x, float y, float z)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->AddImpulse(*bid, Vec3(x, y, z));
+}
+
+void JoltSetFriction(JoltBodyInterface bodyInterface, JoltBodyID bodyID, float friction)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetFriction(*bid, friction);
+}
+
+void JoltSetRestitution(JoltBodyInterface bodyInterface, JoltBodyID bodyID, float restitution)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetRestitution(*bid, restitution);
+}
+
+void JoltSetLinearDamping(JoltPhysicsSystem system, JoltBodyID bodyID, float damping)
+{
+	PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+	PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+
+	BodyLockWrite lock(ps->GetBodyLockInterface(), *bid);
+	if (lock.Succeeded())
+	{
+		lock.GetBody().GetMotionProperties()->SetLinearDamping(damping);
+	}
+}
+
+void JoltSetAngularDamping(JoltPhysicsSystem system, JoltBodyID bodyID, float damping)
+{
+	PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+	PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+
+	BodyLockWrite lock(ps->GetBodyLockInterface(), *bid);
+	if (lock.Succeeded())
+	{
+		lock.GetBody().GetMotionProperties()->SetAngularDamping(damping);
+	}
+}
+
+void JoltSetGravityFactor(JoltBodyInterface bodyInterface, JoltBodyID bodyID, float factor)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetGravityFactor(*bid, factor);
+}
+
+void JoltGetRotation(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                     float* x, float* y, float* z, float* w)
+{
+	const BodyInterface *bi = static_cast<const BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	Quat rot = bi->GetRotation(*bid);
+	*x = rot.GetX();
+	*y = rot.GetY();
+	*z = rot.GetZ();
+	*w = rot.GetW();
+}
+
+void JoltSetRotation(JoltBodyInterface bodyInterface, JoltBodyID bodyID,
+                     float x, float y, float z, float w)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	bi->SetRotation(*bid, Quat(x, y, z, w), EActivation::DontActivate);
+}
+
+int JoltIsBodyActive(JoltBodyInterface bodyInterface, JoltBodyID bodyID)
+{
+	const BodyInterface *bi = static_cast<const BodyInterface *>(bodyInterface);
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	return bi->IsActive(*bid) ? 1 : 0;
+}
+
+void JoltRemoveAndDestroyBody(JoltBodyInterface bodyInterface, JoltBodyID bodyID)
+{
+	BodyInterface *bi = static_cast<BodyInterface *>(bodyInterface);
+	BodyID *bid = static_cast<BodyID *>(bodyID);
+	bi->RemoveBody(*bid);
+	bi->DestroyBody(*bid);
 	delete bid;
 }
