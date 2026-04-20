@@ -39,6 +39,9 @@ namespace JPH {
 
 // Forward declaration for contact listener implementation
 class ContactListenerImpl;
+// T-0121: callback-based listeners
+class ContactCallbackListenerImpl;
+class BodyActivationListenerImpl;
 
 // Wrapper to keep layer interfaces alive (PhysicsSystem stores references to them)
 struct PhysicsSystemWrapper
@@ -48,8 +51,13 @@ struct PhysicsSystemWrapper
     std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter> object_vs_broadphase_layer_filter;
     std::unique_ptr<JPH::ObjectLayerPairFilter> object_vs_object_layer_filter;
 
-    // Optional: contact event listener (T-0103)
+    // Optional: contact event listener (T-0103, queue/poll)
     ContactListenerImpl* contact_listener = nullptr;
+
+    // Optional: callback-based listeners (T-0121). Only one ContactListener can be
+    // installed on the PhysicsSystem at a time; setting one replaces the other.
+    ContactCallbackListenerImpl* contact_callback_listener = nullptr;
+    BodyActivationListenerImpl* body_activation_listener = nullptr;
 
     ~PhysicsSystemWrapper();
 };
@@ -61,6 +69,10 @@ const JPH::ObjectLayerPairFilter* GetObjectLayerPairFilter(PhysicsSystemWrapper*
 
 // Defined in layers.cpp where ContactListenerImpl is complete
 void DestroyContactListener(ContactListenerImpl* listener);
+
+// Defined in contact.cpp where the callback-listener types are complete (T-0121).
+void DestroyContactCallbackListener(ContactCallbackListenerImpl* listener);
+void DestroyBodyActivationListener(BodyActivationListenerImpl* listener);
 
 #endif
 

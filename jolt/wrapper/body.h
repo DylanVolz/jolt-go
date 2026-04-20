@@ -60,6 +60,10 @@ void JoltSetBodyShape(JoltBodyInterface bodyInterface,
 // Destroy a body ID
 void JoltDestroyBodyID(JoltBodyID bodyID);
 
+// Get the packed (index | sequence-number) value of a body ID. Matches the
+// IDs reported through ContactListener / BodyActivationListener callbacks.
+unsigned int JoltBodyIDGetIndexAndSequenceNumber(JoltBodyID bodyID);
+
 // --- Extended Body API (T-0102) ---
 
 // Linear velocity

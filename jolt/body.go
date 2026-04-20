@@ -33,6 +33,14 @@ func (b *BodyID) Destroy() {
 	C.JoltDestroyBodyID(b.handle)
 }
 
+// IndexAndSequenceNumber returns the packed (index | sequence-number) value of
+// this body ID. This is the same uint32 reported through ContactListener and
+// BodyActivationListener callbacks, allowing tests/handlers to match callback
+// IDs back to the BodyIDs they hold.
+func (b *BodyID) IndexAndSequenceNumber() uint32 {
+	return uint32(C.JoltBodyIDGetIndexAndSequenceNumber(b.handle))
+}
+
 // GetPosition returns the current position of a body
 func (bi *BodyInterface) GetPosition(bodyID *BodyID) Vec3 {
 	var x, y, z C.float
