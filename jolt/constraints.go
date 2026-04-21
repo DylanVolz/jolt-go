@@ -725,6 +725,82 @@ func (c *Constraint) SixDOFGetTotalLambdaMotorRotation() Vec3 {
 	return Vec3{X: float32(x), Y: float32(y), Z: float32(z)}
 }
 
+// --- Point Constraint (T-0122) ---
+
+// CreatePointConstraint creates a ball-joint constraint that removes
+// 3 linear DOFs between two bodies while leaving all rotational DOFs free.
+// point: world-space attachment point shared by both bodies.
+func (ps *PhysicsSystem) CreatePointConstraint(
+	bodyID1, bodyID2 *BodyID,
+	point Vec3,
+) *Constraint {
+	handle := C.JoltCreatePointConstraint(
+		ps.handle,
+		bodyID1.handle, bodyID2.handle,
+		C.float(point.X), C.float(point.Y), C.float(point.Z),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// PointGetTotalLambdaPosition returns the position constraint impulse vector
+func (c *Constraint) PointGetTotalLambdaPosition() Vec3 {
+	var x, y, z C.float
+	C.JoltPointConstraintGetTotalLambdaPosition(c.handle, &x, &y, &z)
+	return Vec3{X: float32(x), Y: float32(y), Z: float32(z)}
+}
+
+// --- Cone Constraint (T-0122) ---
+
+// CreateConeConstraint creates a swing-limited ball-joint between two bodies.
+// It removes 3 linear DOFs and clamps the swing between the two bodies'
+// twist axes to within halfAngleMax radians ([0, pi]).
+// point: world-space attachment point shared by both bodies.
+// twistAxis: world-space twist axis shared by both bodies (should be normalized).
+// halfAngleMax: maximum allowed swing half-angle, in radians.
+func (ps *PhysicsSystem) CreateConeConstraint(
+	bodyID1, bodyID2 *BodyID,
+	point Vec3,
+	twistAxis Vec3,
+	halfAngleMax float32,
+) *Constraint {
+	handle := C.JoltCreateConeConstraint(
+		ps.handle,
+		bodyID1.handle, bodyID2.handle,
+		C.float(point.X), C.float(point.Y), C.float(point.Z),
+		C.float(twistAxis.X), C.float(twistAxis.Y), C.float(twistAxis.Z),
+		C.float(halfAngleMax),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// ConeSetHalfConeAngle updates the maximum allowed swing half-angle (radians, [0, pi]).
+func (c *Constraint) ConeSetHalfConeAngle(halfAngle float32) {
+	C.JoltConeConstraintSetHalfConeAngle(c.handle, C.float(halfAngle))
+}
+
+// ConeGetCosHalfConeAngle returns the cosine of the configured half-cone angle.
+func (c *Constraint) ConeGetCosHalfConeAngle() float32 {
+	return float32(C.JoltConeConstraintGetCosHalfConeAngle(c.handle))
+}
+
+// ConeGetTotalLambdaPosition returns the position constraint impulse vector
+func (c *Constraint) ConeGetTotalLambdaPosition() Vec3 {
+	var x, y, z C.float
+	C.JoltConeConstraintGetTotalLambdaPosition(c.handle, &x, &y, &z)
+	return Vec3{X: float32(x), Y: float32(y), Z: float32(z)}
+}
+
+// ConeGetTotalLambdaRotation returns the swing-limit rotation impulse magnitude
+func (c *Constraint) ConeGetTotalLambdaRotation() float32 {
+	return float32(C.JoltConeConstraintGetTotalLambdaRotation(c.handle))
+}
+
 // --- Buoyancy ---
 
 // ApplyBuoyancyImpulse applies buoyancy and drag forces to a body using surface plane detection.
