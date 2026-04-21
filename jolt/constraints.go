@@ -801,6 +801,78 @@ func (c *Constraint) ConeGetTotalLambdaRotation() float32 {
 	return float32(C.JoltConeConstraintGetTotalLambdaRotation(c.handle))
 }
 
+// --- Pulley Constraint ---
+
+// CreatePulleyConstraint creates a rope-over-pulley coupling between two bodies.
+//
+// The constraint enforces MinLength <= L1 + ratio*L2 <= MaxLength, where
+// L1 = |bodyPoint1 - fixedPoint1| and L2 = |bodyPoint2 - fixedPoint2|. This
+// models a rope that passes over one or two fixed pulley anchors.
+//
+// Parameters:
+//   - bodyPoint1/bodyPoint2: world-space attachment points on each body
+//   - fixedPoint1/fixedPoint2: world-space fixed pulley anchor positions.
+//     Use the same value for both to model a single pulley wheel.
+//   - ratio: segment-2 length multiplier. 1 = plain pulley (Atwood machine);
+//     >1 = block-and-tackle — moving body 1 by X moves body 2 by X/ratio,
+//     trading speed for mechanical advantage.
+//   - minLength/maxLength: bounds on the combined length. Pass -1 to
+//     auto-detect from the initial configuration; set min == max for a
+//     rigid rope.
+//
+// Typical use cases: well buckets with counterweight, portcullis chains,
+// drawbridge lifts, trebuchet counterweights.
+func (ps *PhysicsSystem) CreatePulleyConstraint(
+	bodyID1, bodyID2 *BodyID,
+	bodyPoint1, bodyPoint2 Vec3,
+	fixedPoint1, fixedPoint2 Vec3,
+	ratio float32,
+	minLength, maxLength float32,
+) *Constraint {
+	handle := C.JoltCreatePulleyConstraint(
+		ps.handle,
+		bodyID1.handle, bodyID2.handle,
+		C.float(bodyPoint1.X), C.float(bodyPoint1.Y), C.float(bodyPoint1.Z),
+		C.float(bodyPoint2.X), C.float(bodyPoint2.Y), C.float(bodyPoint2.Z),
+		C.float(fixedPoint1.X), C.float(fixedPoint1.Y), C.float(fixedPoint1.Z),
+		C.float(fixedPoint2.X), C.float(fixedPoint2.Y), C.float(fixedPoint2.Z),
+		C.float(ratio),
+		C.float(minLength), C.float(maxLength),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// PulleySetLength updates the min/max length bounds. Both must be non-negative
+// and min <= max.
+func (c *Constraint) PulleySetLength(minLength, maxLength float32) {
+	C.JoltPulleyConstraintSetLength(c.handle, C.float(minLength), C.float(maxLength))
+}
+
+// PulleyGetMinLength returns the minimum allowed combined length.
+func (c *Constraint) PulleyGetMinLength() float32 {
+	return float32(C.JoltPulleyConstraintGetMinLength(c.handle))
+}
+
+// PulleyGetMaxLength returns the maximum allowed combined length.
+func (c *Constraint) PulleyGetMaxLength() float32 {
+	return float32(C.JoltPulleyConstraintGetMaxLength(c.handle))
+}
+
+// PulleyGetCurrentLength returns the current combined length
+// (|body1 - fixed1| + ratio * |body2 - fixed2|).
+func (c *Constraint) PulleyGetCurrentLength() float32 {
+	return float32(C.JoltPulleyConstraintGetCurrentLength(c.handle))
+}
+
+// PulleyGetTotalLambdaPosition returns the constraint impulse magnitude from
+// the last solver step.
+func (c *Constraint) PulleyGetTotalLambdaPosition() float32 {
+	return float32(C.JoltPulleyConstraintGetTotalLambdaPosition(c.handle))
+}
+
 // --- Buoyancy ---
 
 // ApplyBuoyancyImpulse applies buoyancy and drag forces to a body using surface plane detection.

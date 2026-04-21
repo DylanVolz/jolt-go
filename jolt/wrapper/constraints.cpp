@@ -20,6 +20,7 @@
 
 using namespace JPH;
 
+#include <Jolt/Physics/Constraints/PulleyConstraint.h>
 // --- Helper: resolve bodies from system + body IDs ---
 // Returns false if either body lock fails.
 static bool LockTwoBodies(PhysicsSystem *ps, const BodyID &bid1, const BodyID &bid2,
@@ -896,6 +897,74 @@ float JoltConeConstraintGetTotalLambdaRotation(JoltConstraint constraint)
 {
     ConeConstraint *c = static_cast<ConeConstraint *>(constraint);
     return c->GetTotalLambdaRotation();
+}
+
+// --- Pulley Constraint ---
+
+JoltConstraint JoltCreatePulleyConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float bodyPoint1X, float bodyPoint1Y, float bodyPoint1Z,
+    float bodyPoint2X, float bodyPoint2Y, float bodyPoint2Z,
+    float fixedPoint1X, float fixedPoint1Y, float fixedPoint1Z,
+    float fixedPoint2X, float fixedPoint2Y, float fixedPoint2Z,
+    float ratio,
+    float minLength, float maxLength)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    PulleyConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    settings.mBodyPoint1 = RVec3(bodyPoint1X, bodyPoint1Y, bodyPoint1Z);
+    settings.mBodyPoint2 = RVec3(bodyPoint2X, bodyPoint2Y, bodyPoint2Z);
+    settings.mFixedPoint1 = RVec3(fixedPoint1X, fixedPoint1Y, fixedPoint1Z);
+    settings.mFixedPoint2 = RVec3(fixedPoint2X, fixedPoint2Y, fixedPoint2Z);
+    settings.mRatio = ratio;
+    settings.mMinLength = minLength;
+    settings.mMaxLength = maxLength;
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltPulleyConstraintSetLength(JoltConstraint constraint,
+                                    float minLength, float maxLength)
+{
+    PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
+    c->SetLength(minLength, maxLength);
+}
+
+float JoltPulleyConstraintGetMinLength(JoltConstraint constraint)
+{
+    PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
+    return c->GetMinLength();
+}
+
+float JoltPulleyConstraintGetMaxLength(JoltConstraint constraint)
+{
+    PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
+    return c->GetMaxLength();
+}
+
+float JoltPulleyConstraintGetCurrentLength(JoltConstraint constraint)
+{
+    PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
+    return c->GetCurrentLength();
+}
+
+float JoltPulleyConstraintGetTotalLambdaPosition(JoltConstraint constraint)
+{
+    PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
+    return c->GetTotalLambdaPosition();
 }
 
 // --- Buoyancy ---
