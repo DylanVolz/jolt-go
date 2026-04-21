@@ -340,6 +340,38 @@ void JoltConeConstraintGetTotalLambdaPosition(JoltConstraint constraint,
                                                float* x, float* y, float* z);
 float JoltConeConstraintGetTotalLambdaRotation(JoltConstraint constraint);
 
+// --- Pulley Constraint ---
+
+// Create a pulley constraint between two bodies.
+// bodyPoint1/bodyPoint2: world-space attachment points on each body (e.g. top-of-bucket).
+// fixedPoint1/fixedPoint2: world-space fixed pulley anchor points. Use the same value
+//   for both to model a single pulley wheel; use different values for compound pulleys.
+// ratio: multiplier applied to segment 2 length. 1 = simple pulley, >1 = block-and-tackle
+//   mechanical advantage where moving body 1 by X moves body 2 by X/ratio.
+// minLength/maxLength: constraint on (Length1 + ratio * Length2). Use -1 for either to
+//   auto-detect from the initial configuration. Set min == max for a rigid rope.
+JoltConstraint JoltCreatePulleyConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float bodyPoint1X, float bodyPoint1Y, float bodyPoint1Z,
+    float bodyPoint2X, float bodyPoint2Y, float bodyPoint2Z,
+    float fixedPoint1X, float fixedPoint1Y, float fixedPoint1Z,
+    float fixedPoint2X, float fixedPoint2Y, float fixedPoint2Z,
+    float ratio,
+    float minLength, float maxLength);
+
+// Update the min/max length bounds. Both must be >= 0 and min <= max.
+void JoltPulleyConstraintSetLength(JoltConstraint constraint,
+                                    float minLength, float maxLength);
+float JoltPulleyConstraintGetMinLength(JoltConstraint constraint);
+float JoltPulleyConstraintGetMaxLength(JoltConstraint constraint);
+
+// Current effective length: |body1 - fixed1| + ratio * |body2 - fixed2|.
+float JoltPulleyConstraintGetCurrentLength(JoltConstraint constraint);
+
+// Force readback (impulse applied this step)
+float JoltPulleyConstraintGetTotalLambdaPosition(JoltConstraint constraint);
+
 // --- Buoyancy (Body-level API) ---
 
 // Apply buoyancy impulse using surface plane detection (simple overload).
