@@ -1,7 +1,10 @@
 package jolt
 
 // #include "wrapper/constraints.h"
+// #include <stdlib.h>
 import "C"
+
+import "unsafe"
 
 // MotorState controls how a constraint motor behaves
 type MotorState int
@@ -9,7 +12,7 @@ type MotorState int
 const (
 	MotorStateOff      MotorState = C.JoltMotorStateOff      // Motor is off
 	MotorStateVelocity MotorState = C.JoltMotorStateVelocity // Motor drives to target velocity
-	MotorStatePosition MotorState = C.JoltMotorStatePosition  // Motor drives to target position
+	MotorStatePosition MotorState = C.JoltMotorStatePosition // Motor drives to target position
 )
 
 // Constraint represents a physics constraint between two bodies.
@@ -871,6 +874,208 @@ func (c *Constraint) PulleyGetCurrentLength() float32 {
 // the last solver step.
 func (c *Constraint) PulleyGetTotalLambdaPosition() float32 {
 	return float32(C.JoltPulleyConstraintGetTotalLambdaPosition(c.handle))
+}
+
+// --- Path Constraint (Hermite spline) ---
+
+// PathRotationConstraintType determines how body 2's rotation is constrained along the path
+type PathRotationConstraintType int
+
+const (
+	PathRotationFree                    PathRotationConstraintType = C.JoltPathRotationFree
+	PathRotationConstrainAroundTangent  PathRotationConstraintType = C.JoltPathRotationConstrainAroundTangent
+	PathRotationConstrainAroundNormal   PathRotationConstraintType = C.JoltPathRotationConstrainAroundNormal
+	PathRotationConstrainAroundBinormal PathRotationConstraintType = C.JoltPathRotationConstrainAroundBinormal
+	PathRotationConstrainToPath         PathRotationConstraintType = C.JoltPathRotationConstrainToPath
+	PathRotationFullyConstrained        PathRotationConstraintType = C.JoltPathRotationFullyConstrained
+)
+
+// HermitePathPoint is a single control point on a Hermite-spline path.
+// Tangent points along the direction of travel and does not need to be normalized.
+// Normal is perpendicular to Tangent and together they form the constraint basis
+// (useful for constraining body orientation along the path).
+type HermitePathPoint struct {
+	Position Vec3
+	Tangent  Vec3
+	Normal   Vec3
+}
+
+// HermitePath is a reference-counted Hermite-spline path for PathConstraint.
+// Call Destroy() when done — the path ref is shared with any constraint that uses it,
+// so Jolt keeps it alive until both the Go-side and all constraints release their refs.
+type HermitePath struct {
+	handle C.JoltPathConstraintPath
+}
+
+// CreateHermitePath builds a Hermite spline from at least 2 control points.
+// If looping is true, the first and last point are auto-connected (they must not be identical).
+func CreateHermitePath(points []HermitePathPoint, looping bool) *HermitePath {
+	n := len(points)
+	if n < 2 {
+		return nil
+	}
+
+	positions := make([]C.float, 3*n)
+	tangents := make([]C.float, 3*n)
+	normals := make([]C.float, 3*n)
+	for i, p := range points {
+		positions[3*i+0] = C.float(p.Position.X)
+		positions[3*i+1] = C.float(p.Position.Y)
+		positions[3*i+2] = C.float(p.Position.Z)
+		tangents[3*i+0] = C.float(p.Tangent.X)
+		tangents[3*i+1] = C.float(p.Tangent.Y)
+		tangents[3*i+2] = C.float(p.Tangent.Z)
+		normals[3*i+0] = C.float(p.Normal.X)
+		normals[3*i+1] = C.float(p.Normal.Y)
+		normals[3*i+2] = C.float(p.Normal.Z)
+	}
+
+	loop := C.int(0)
+	if looping {
+		loop = 1
+	}
+	handle := C.JoltCreateHermitePath(
+		(*C.float)(unsafe.Pointer(&positions[0])),
+		(*C.float)(unsafe.Pointer(&tangents[0])),
+		(*C.float)(unsafe.Pointer(&normals[0])),
+		C.int(n), loop,
+	)
+	if handle == nil {
+		return nil
+	}
+	return &HermitePath{handle: handle}
+}
+
+// Destroy releases this Go-side reference to the path.
+// Safe to call after the path has been passed to CreatePathConstraint.
+func (p *HermitePath) Destroy() {
+	if p.handle != nil {
+		C.JoltDestroyPath(p.handle)
+		p.handle = nil
+	}
+}
+
+// MaxFraction returns the highest valid fraction for this path.
+// For a non-looping N-point path this is N-1; for a looping path it is N.
+func (p *HermitePath) MaxFraction() float32 {
+	return float32(C.JoltPathGetMaxFraction(p.handle))
+}
+
+// PointOnPath evaluates the position and tangent at a given fraction along the path.
+func (p *HermitePath) PointOnPath(fraction float32) (position, tangent Vec3) {
+	var px, py, pz, tx, ty, tz C.float
+	C.JoltPathGetPointOnPath(p.handle, C.float(fraction),
+		&px, &py, &pz, &tx, &ty, &tz)
+	return Vec3{X: float32(px), Y: float32(py), Z: float32(pz)},
+		Vec3{X: float32(tx), Y: float32(ty), Z: float32(tz)}
+}
+
+// CreatePathConstraint attaches body2 to a Hermite path anchored on body1.
+//
+// pathPosition / pathRotation give the path's origin in body1's local space
+// (pass {0,0,0} and QuatIdentity() to anchor at body1's origin).
+// pathFraction is the starting fraction for body2 along the path (0 = beginning).
+// rotationConstraintType controls how body2's orientation is tied to the path.
+// maxFrictionForce is the force clamp applied along the path when the motor is off.
+func (ps *PhysicsSystem) CreatePathConstraint(
+	bodyID1, bodyID2 *BodyID,
+	path *HermitePath,
+	pathPosition Vec3,
+	pathRotation Quat,
+	pathFraction float32,
+	rotationConstraintType PathRotationConstraintType,
+	maxFrictionForce float32,
+) *Constraint {
+	if path == nil || path.handle == nil {
+		return nil
+	}
+	handle := C.JoltCreatePathConstraint(
+		ps.handle,
+		bodyID1.handle, bodyID2.handle,
+		path.handle,
+		C.float(pathPosition.X), C.float(pathPosition.Y), C.float(pathPosition.Z),
+		C.float(pathRotation.X), C.float(pathRotation.Y), C.float(pathRotation.Z), C.float(pathRotation.W),
+		C.float(pathFraction),
+		C.JoltPathRotationConstraintType(rotationConstraintType),
+		C.float(maxFrictionForce),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// PathSetPath swaps in a new Hermite path, re-anchoring body2 at pathFraction.
+func (c *Constraint) PathSetPath(path *HermitePath, pathFraction float32) {
+	var h C.JoltPathConstraintPath
+	if path != nil {
+		h = path.handle
+	}
+	C.JoltPathConstraintSetPath(c.handle, h, C.float(pathFraction))
+}
+
+// PathGetPathFraction returns the current fraction of body2 along the path.
+func (c *Constraint) PathGetPathFraction() float32 {
+	return float32(C.JoltPathConstraintGetPathFraction(c.handle))
+}
+
+// PathSetMaxFrictionForce sets the friction clamp applied along the path when
+// the motor is off.
+func (c *Constraint) PathSetMaxFrictionForce(force float32) {
+	C.JoltPathConstraintSetMaxFrictionForce(c.handle, C.float(force))
+}
+
+// PathGetMaxFrictionForce returns the current friction force clamp.
+func (c *Constraint) PathGetMaxFrictionForce() float32 {
+	return float32(C.JoltPathConstraintGetMaxFrictionForce(c.handle))
+}
+
+// PathSetPositionMotorState sets the motor mode (Off, Velocity, Position).
+func (c *Constraint) PathSetPositionMotorState(state MotorState) {
+	C.JoltPathConstraintSetPositionMotorState(c.handle, C.JoltMotorState(state))
+}
+
+// PathGetPositionMotorState returns the current motor state.
+func (c *Constraint) PathGetPositionMotorState() MotorState {
+	return MotorState(C.JoltPathConstraintGetPositionMotorState(c.handle))
+}
+
+// PathSetTargetVelocity sets the target velocity along the path (Velocity mode, fraction/sec).
+func (c *Constraint) PathSetTargetVelocity(velocity float32) {
+	C.JoltPathConstraintSetTargetVelocity(c.handle, C.float(velocity))
+}
+
+// PathGetTargetVelocity returns the target velocity along the path.
+func (c *Constraint) PathGetTargetVelocity() float32 {
+	return float32(C.JoltPathConstraintGetTargetVelocity(c.handle))
+}
+
+// PathSetTargetPathFraction sets the target fraction along the path (Position mode).
+func (c *Constraint) PathSetTargetPathFraction(fraction float32) {
+	C.JoltPathConstraintSetTargetPathFraction(c.handle, C.float(fraction))
+}
+
+// PathGetTargetPathFraction returns the target fraction along the path.
+func (c *Constraint) PathGetTargetPathFraction() float32 {
+	return float32(C.JoltPathConstraintGetTargetPathFraction(c.handle))
+}
+
+// PathSetPositionMotorSettings configures the position motor spring and force limits.
+// forceLimit clamps the motor's linear impulse per step; torqueLimit clamps its rotational.
+func (c *Constraint) PathSetPositionMotorSettings(frequency, damping, forceLimit, torqueLimit float32) {
+	C.JoltPathConstraintSetPositionMotorSettings(c.handle,
+		C.float(frequency), C.float(damping),
+		C.float(forceLimit), C.float(torqueLimit))
+}
+
+// PathGetTotalLambdaMotor returns the motor impulse from the last step.
+func (c *Constraint) PathGetTotalLambdaMotor() float32 {
+	return float32(C.JoltPathConstraintGetTotalLambdaMotor(c.handle))
+}
+
+// PathGetTotalLambdaPositionLimits returns the path-endpoint limit impulse from the last step.
+func (c *Constraint) PathGetTotalLambdaPositionLimits() float32 {
+	return float32(C.JoltPathConstraintGetTotalLambdaPositionLimits(c.handle))
 }
 
 // --- Buoyancy ---

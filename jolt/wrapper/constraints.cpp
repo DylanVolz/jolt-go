@@ -17,6 +17,9 @@
 #include <Jolt/Physics/Constraints/ConeConstraint.h>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
+#include <Jolt/Physics/Constraints/PathConstraint.h>
+#include <Jolt/Physics/Constraints/PathConstraintPath.h>
+#include <Jolt/Physics/Constraints/PathConstraintPathHermite.h>
 
 using namespace JPH;
 
@@ -965,6 +968,184 @@ float JoltPulleyConstraintGetTotalLambdaPosition(JoltConstraint constraint)
 {
     PulleyConstraint *c = static_cast<PulleyConstraint *>(constraint);
     return c->GetTotalLambdaPosition();
+}
+
+// --- Path Constraint (Hermite spline) ---
+
+JoltPathConstraintPath JoltCreateHermitePath(
+    const float *positions,
+    const float *tangents,
+    const float *normals,
+    int pointCount,
+    int isLooping)
+{
+    if (pointCount < 2 || !positions || !tangents || !normals)
+        return nullptr;
+
+    PathConstraintPathHermite *path = new PathConstraintPathHermite();
+    path->SetIsLooping(isLooping != 0);
+
+    for (int i = 0; i < pointCount; ++i)
+    {
+        const int base = 3 * i;
+        path->AddPoint(
+            Vec3(positions[base + 0], positions[base + 1], positions[base + 2]),
+            Vec3(tangents[base + 0], tangents[base + 1], tangents[base + 2]),
+            Vec3(normals[base + 0], normals[base + 1], normals[base + 2]));
+    }
+
+    path->AddRef(); // caller owns one ref
+    return static_cast<JoltPathConstraintPath>(path);
+}
+
+void JoltDestroyPath(JoltPathConstraintPath path)
+{
+    PathConstraintPath *p = static_cast<PathConstraintPath *>(path);
+    if (p)
+        p->Release();
+}
+
+float JoltPathGetMaxFraction(JoltPathConstraintPath path)
+{
+    PathConstraintPath *p = static_cast<PathConstraintPath *>(path);
+    return p->GetPathMaxFraction();
+}
+
+void JoltPathGetPointOnPath(
+    JoltPathConstraintPath path, float fraction,
+    float *outPosX, float *outPosY, float *outPosZ,
+    float *outTanX, float *outTanY, float *outTanZ)
+{
+    PathConstraintPath *p = static_cast<PathConstraintPath *>(path);
+    Vec3 pos, tan, nrm, bin;
+    p->GetPointOnPath(fraction, pos, tan, nrm, bin);
+    if (outPosX) *outPosX = pos.GetX();
+    if (outPosY) *outPosY = pos.GetY();
+    if (outPosZ) *outPosZ = pos.GetZ();
+    if (outTanX) *outTanX = tan.GetX();
+    if (outTanY) *outTanY = tan.GetY();
+    if (outTanZ) *outTanZ = tan.GetZ();
+}
+
+JoltConstraint JoltCreatePathConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    JoltPathConstraintPath path,
+    float pathPosX, float pathPosY, float pathPosZ,
+    float pathRotX, float pathRotY, float pathRotZ, float pathRotW,
+    float pathFraction,
+    JoltPathRotationConstraintType rotationConstraintType,
+    float maxFrictionForce)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+    PathConstraintPath *p = static_cast<PathConstraintPath *>(path);
+    if (!p)
+        return nullptr;
+
+    PathConstraintSettings settings;
+    settings.mPath = p;
+    settings.mPathPosition = Vec3(pathPosX, pathPosY, pathPosZ);
+    settings.mPathRotation = Quat(pathRotX, pathRotY, pathRotZ, pathRotW);
+    settings.mPathFraction = pathFraction;
+    settings.mRotationConstraintType = static_cast<EPathRotationConstraintType>(rotationConstraintType);
+    settings.mMaxFrictionForce = maxFrictionForce;
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltPathConstraintSetPath(JoltConstraint constraint,
+                                JoltPathConstraintPath path, float pathFraction)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    PathConstraintPath *p = static_cast<PathConstraintPath *>(path);
+    c->SetPath(p, pathFraction);
+}
+
+float JoltPathConstraintGetPathFraction(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetPathFraction();
+}
+
+void JoltPathConstraintSetMaxFrictionForce(JoltConstraint constraint, float force)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    c->SetMaxFrictionForce(force);
+}
+
+float JoltPathConstraintGetMaxFrictionForce(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetMaxFrictionForce();
+}
+
+void JoltPathConstraintSetPositionMotorState(JoltConstraint constraint, JoltMotorState state)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    c->SetPositionMotorState(static_cast<EMotorState>(state));
+}
+
+int JoltPathConstraintGetPositionMotorState(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return static_cast<int>(c->GetPositionMotorState());
+}
+
+void JoltPathConstraintSetTargetVelocity(JoltConstraint constraint, float velocity)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    c->SetTargetVelocity(velocity);
+}
+
+float JoltPathConstraintGetTargetVelocity(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetTargetVelocity();
+}
+
+void JoltPathConstraintSetTargetPathFraction(JoltConstraint constraint, float fraction)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    c->SetTargetPathFraction(fraction);
+}
+
+float JoltPathConstraintGetTargetPathFraction(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetTargetPathFraction();
+}
+
+void JoltPathConstraintSetPositionMotorSettings(JoltConstraint constraint,
+                                                 float frequency, float damping,
+                                                 float forceLimit, float torqueLimit)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    MotorSettings &ms = c->GetPositionMotorSettings();
+    ms.mSpringSettings = SpringSettings(ESpringMode::FrequencyAndDamping, frequency, damping);
+    ms.SetForceLimit(forceLimit);
+    ms.SetTorqueLimit(torqueLimit);
+}
+
+float JoltPathConstraintGetTotalLambdaMotor(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetTotalLambdaMotor();
+}
+
+float JoltPathConstraintGetTotalLambdaPositionLimits(JoltConstraint constraint)
+{
+    PathConstraint *c = static_cast<PathConstraint *>(constraint);
+    return c->GetTotalLambdaPositionLimits();
 }
 
 // --- Buoyancy ---
