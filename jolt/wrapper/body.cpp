@@ -144,6 +144,13 @@ void JoltDestroyBodyID(JoltBodyID bodyID)
 	delete bid;
 }
 
+unsigned int JoltBodyIDGetIndexAndSequenceNumber(JoltBodyID bodyID)
+{
+	const BodyID *bid = static_cast<const BodyID *>(bodyID);
+	if (!bid) return 0;
+	return bid->GetIndexAndSequenceNumber();
+}
+
 // --- Extended Body API (T-0102) ---
 
 void JoltGetLinearVelocity(JoltBodyInterface bodyInterface, JoltBodyID bodyID,

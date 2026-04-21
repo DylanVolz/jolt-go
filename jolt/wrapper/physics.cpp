@@ -109,10 +109,12 @@ public:
 	}
 };
 
-// PhysicsSystemWrapper destructor — clean up contact listener if set
+// PhysicsSystemWrapper destructor — clean up listeners if set
 PhysicsSystemWrapper::~PhysicsSystemWrapper()
 {
 	DestroyContactListener(contact_listener);
+	DestroyContactCallbackListener(contact_callback_listener);
+	DestroyBodyActivationListener(body_activation_listener);
 }
 
 JoltPhysicsSystem JoltCreatePhysicsSystem()
