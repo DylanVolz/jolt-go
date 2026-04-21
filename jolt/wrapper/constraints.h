@@ -300,6 +300,46 @@ void JoltSixDOFGetTotalLambdaRotation(JoltConstraint c, float *x, float *y, floa
 void JoltSixDOFGetTotalLambdaMotorTranslation(JoltConstraint c, float *x, float *y, float *z);
 void JoltSixDOFGetTotalLambdaMotorRotation(JoltConstraint c, float *x, float *y, float *z);
 
+// --- Point Constraint (T-0122) ---
+
+// Create a point (ball-joint) constraint between two bodies.
+// Constrains 3 linear DOFs while leaving all rotational DOFs free.
+// point: world-space attachment point shared by both bodies.
+JoltConstraint JoltCreatePointConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float pointX, float pointY, float pointZ);
+
+// Force readback (position impulse this step)
+void JoltPointConstraintGetTotalLambdaPosition(JoltConstraint constraint,
+                                                float* x, float* y, float* z);
+
+// --- Cone Constraint (T-0122) ---
+
+// Create a cone (swing-limited ball-joint) constraint between two bodies.
+// Constrains 3 linear DOFs and limits the swing between the two bodies'
+// twist axes to within halfAngleMax radians (allowed range: [0, PI]).
+// point: world-space attachment point shared by both bodies.
+// twistAxis: world-space twist axis shared by both bodies (normalized).
+// halfAngleMax: maximum allowed swing half-angle, in radians.
+JoltConstraint JoltCreateConeConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float pointX, float pointY, float pointZ,
+    float twistAxisX, float twistAxisY, float twistAxisZ,
+    float halfAngleMax);
+
+// Runtime mutation of the cone's half-angle (radians, [0, PI]).
+void JoltConeConstraintSetHalfConeAngle(JoltConstraint constraint, float halfAngle);
+
+// Returns cos(halfConeAngle) stored on the constraint.
+float JoltConeConstraintGetCosHalfConeAngle(JoltConstraint constraint);
+
+// Force readback
+void JoltConeConstraintGetTotalLambdaPosition(JoltConstraint constraint,
+                                               float* x, float* y, float* z);
+float JoltConeConstraintGetTotalLambdaRotation(JoltConstraint constraint);
+
 // --- Buoyancy (Body-level API) ---
 
 // Apply buoyancy impulse using surface plane detection (simple overload).

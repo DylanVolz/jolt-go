@@ -13,6 +13,8 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/ConeConstraint.h>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 
@@ -797,6 +799,103 @@ void JoltSixDOFGetTotalLambdaMotorRotation(JoltConstraint c, float *x, float *y,
 {
     Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTotalLambdaMotorRotation();
     *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+// --- Point Constraint (T-0122) ---
+
+JoltConstraint JoltCreatePointConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float pointX, float pointY, float pointZ)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    PointConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    settings.mPoint1 = RVec3(pointX, pointY, pointZ);
+    settings.mPoint2 = RVec3(pointX, pointY, pointZ);
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltPointConstraintGetTotalLambdaPosition(JoltConstraint constraint,
+                                                float *x, float *y, float *z)
+{
+    PointConstraint *c = static_cast<PointConstraint *>(constraint);
+    Vec3 lambda = c->GetTotalLambdaPosition();
+    *x = lambda.GetX();
+    *y = lambda.GetY();
+    *z = lambda.GetZ();
+}
+
+// --- Cone Constraint (T-0122) ---
+
+JoltConstraint JoltCreateConeConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float pointX, float pointY, float pointZ,
+    float twistAxisX, float twistAxisY, float twistAxisZ,
+    float halfAngleMax)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    ConeConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    settings.mPoint1 = RVec3(pointX, pointY, pointZ);
+    settings.mPoint2 = RVec3(pointX, pointY, pointZ);
+    settings.mTwistAxis1 = Vec3(twistAxisX, twistAxisY, twistAxisZ);
+    settings.mTwistAxis2 = Vec3(twistAxisX, twistAxisY, twistAxisZ);
+    settings.mHalfConeAngle = halfAngleMax;
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltConeConstraintSetHalfConeAngle(JoltConstraint constraint, float halfAngle)
+{
+    ConeConstraint *c = static_cast<ConeConstraint *>(constraint);
+    c->SetHalfConeAngle(halfAngle);
+}
+
+float JoltConeConstraintGetCosHalfConeAngle(JoltConstraint constraint)
+{
+    ConeConstraint *c = static_cast<ConeConstraint *>(constraint);
+    return c->GetCosHalfConeAngle();
+}
+
+void JoltConeConstraintGetTotalLambdaPosition(JoltConstraint constraint,
+                                               float *x, float *y, float *z)
+{
+    ConeConstraint *c = static_cast<ConeConstraint *>(constraint);
+    Vec3 lambda = c->GetTotalLambdaPosition();
+    *x = lambda.GetX();
+    *y = lambda.GetY();
+    *z = lambda.GetZ();
+}
+
+float JoltConeConstraintGetTotalLambdaRotation(JoltConstraint constraint)
+{
+    ConeConstraint *c = static_cast<ConeConstraint *>(constraint);
+    return c->GetTotalLambdaRotation();
 }
 
 // --- Buoyancy ---

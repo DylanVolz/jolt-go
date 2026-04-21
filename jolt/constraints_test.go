@@ -51,6 +51,15 @@ func stepSim(ps *PhysicsSystem, n int, dt float32) {
 	}
 }
 
+// stepWorld steps the simulation for `duration` seconds in `dt` slices.
+// (Port of the helper from T-0122's constraints_test.go.)
+func stepWorld(ps *PhysicsSystem, duration, dt float32) {
+	steps := int(duration / dt)
+	for range steps {
+		ps.Update(dt)
+	}
+}
+
 // makeShoulder creates a fresh physics system with a static torso and a dynamic
 // arm joined by a swing-twist constraint. swing limited to 90°, twist to ±45°.
 func makeShoulder(t *testing.T) (*PhysicsSystem, *BodyInterface, *BodyID, *Constraint) {
@@ -338,5 +347,140 @@ func TestSixDOFConstraintMotorState(t *testing.T) {
 	c.SixDOFSetTargetAngularVelocityCS(Vec3{X: -1, Y: -2, Z: -3})
 	if v := c.SixDOFGetTargetAngularVelocityCS(); v.X != -1 || v.Y != -2 || v.Z != -3 {
 		t.Errorf("target angular velocity = %+v, want (-1,-2,-3)", v)
+	}
+}
+
+func TestPointConstraint(t *testing.T) {
+	ps := NewPhysicsSystem()
+	defer ps.Destroy()
+
+	bi := ps.GetBodyInterface()
+
+	anchorShape := CreateBox(Vec3{X: 0.1, Y: 0.1, Z: 0.1})
+	defer anchorShape.Destroy()
+	anchor := bi.CreateBody(anchorShape, Vec3{X: 0, Y: 5, Z: 0}, MotionTypeStatic, false)
+	defer bi.RemoveAndDestroyBody(anchor)
+
+	// Dynamic body 1m below the anchor; the constraint pins the top of the
+	// dynamic body to the anchor position.
+	bobShape := CreateBox(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
+	defer bobShape.Destroy()
+	bob := bi.CreateBody(bobShape, Vec3{X: 0, Y: 4, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(bob)
+	bi.ActivateBody(bob)
+
+	pivot := Vec3{X: 0, Y: 5, Z: 0}
+	constraint := ps.CreatePointConstraint(anchor, bob, pivot)
+	if constraint == nil {
+		t.Fatal("CreatePointConstraint returned nil")
+	}
+	defer constraint.Destroy()
+	ps.AddConstraint(constraint)
+	defer ps.RemoveConstraint(constraint)
+
+	// Push the bob sideways so gravity + constraint produce pendulum motion.
+	bi.SetLinearVelocity(bob, Vec3{X: 3, Y: 0, Z: 0})
+
+	stepWorld(ps, 1.0, 1.0/60.0)
+
+	// The attachment point on the bob is its top face (y+0.5 above center).
+	// After simulation it should remain fixed at the pivot location: its
+	// center of mass should always be at distance 1.0 from the pivot.
+	pos := bi.GetPosition(bob)
+	offset := pos.Sub(pivot)
+	distance := offset.Length()
+
+	// Allow a small drift from solver inaccuracy.
+	if math.Abs(float64(distance-1.0)) > 0.05 {
+		t.Errorf("bob drifted from pivot: distance=%.3f want ~1.0 (pos=%+v)", distance, pos)
+	}
+
+	// Rotation should be free: the bob should have swung off the Y-axis,
+	// so at least one of X or Z offset components must be non-trivial.
+	swingMagnitude := float32(math.Sqrt(float64(offset.X*offset.X + offset.Z*offset.Z)))
+	if swingMagnitude < 0.05 {
+		t.Errorf("expected pendulum swing off the Y-axis, got xz magnitude=%.3f (pos=%+v)",
+			swingMagnitude, pos)
+	}
+}
+
+// TestConeConstraintClampsSwing asserts the cone constraint clamps the swing
+// between the two bodies' twist axes to the configured half-cone angle.
+func TestConeConstraintClampsSwing(t *testing.T) {
+	ps := NewPhysicsSystem()
+	defer ps.Destroy()
+
+	bi := ps.GetBodyInterface()
+
+	anchorShape := CreateBox(Vec3{X: 0.1, Y: 0.1, Z: 0.1})
+	defer anchorShape.Destroy()
+	anchor := bi.CreateBody(anchorShape, Vec3{X: 0, Y: 5, Z: 0}, MotionTypeStatic, false)
+	defer bi.RemoveAndDestroyBody(anchor)
+
+	bobShape := CreateBox(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
+	defer bobShape.Destroy()
+	bob := bi.CreateBody(bobShape, Vec3{X: 0, Y: 4, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(bob)
+	bi.ActivateBody(bob)
+
+	pivot := Vec3{X: 0, Y: 5, Z: 0}
+	halfAngle := float32(math.Pi / 6) // 30 degrees
+	// Twist axis along +Y. When the bob swings in X or Z, the angle between
+	// body1's Y axis and body2's Y axis grows. The constraint must clamp it.
+	twistAxis := Vec3{X: 0, Y: 1, Z: 0}
+	constraint := ps.CreateConeConstraint(anchor, bob, pivot, twistAxis, halfAngle)
+	if constraint == nil {
+		t.Fatal("CreateConeConstraint returned nil")
+	}
+	defer constraint.Destroy()
+	ps.AddConstraint(constraint)
+	defer ps.RemoveConstraint(constraint)
+
+	// Verify the half-angle round-trip through cos().
+	wantCos := float32(math.Cos(float64(halfAngle)))
+	gotCos := constraint.ConeGetCosHalfConeAngle()
+	if math.Abs(float64(gotCos-wantCos)) > 1e-5 {
+		t.Errorf("ConeGetCosHalfConeAngle=%.6f want %.6f", gotCos, wantCos)
+	}
+
+	// Apply a large angular velocity tipping the bob around Z; gravity alone
+	// would also push it beyond the cone, but the explicit spin guarantees we
+	// hit the limit.
+	bi.SetAngularVelocity(bob, Vec3{X: 0, Y: 0, Z: 5})
+
+	stepWorld(ps, 2.0, 1.0/120.0)
+
+	// The bob's local +Y axis, rotated into world space, must stay within the
+	// cone around the world +Y (twist axis). The dot product of the rotated
+	// axis with world +Y must therefore be >= cos(halfAngle) minus solver slop.
+	rot := bi.GetRotation(bob)
+	bobY := rotateY(rot)
+	dot := bobY.Y // bob-local Y rotated into world, dotted with world Y
+	tolerance := float32(0.03)
+	if dot < wantCos-tolerance {
+		angle := math.Acos(float64(dot))
+		t.Errorf("swing exceeded cone: dot=%.4f want >= %.4f (angle=%.3f rad, limit=%.3f rad)",
+			dot, wantCos, angle, halfAngle)
+	}
+
+	// Sanity: the bob should have actually swung — if it stayed perfectly
+	// upright the test proves nothing. Require at least half the cone limit.
+	if dot > 0.999 {
+		t.Errorf("bob did not swing at all (dot=%.4f); test setup is degenerate", dot)
+	}
+}
+
+// rotateY returns the world-space direction of the body-local +Y axis after
+// applying quaternion q (q must be unit-length).
+func rotateY(q Quat) Vec3 {
+	// Standard formula: v' = q * (0,1,0) * q_conj, expanded.
+	// For the +Y basis vector:
+	//   x' = 2(qx*qy - qw*qz)
+	//   y' = 1 - 2(qx*qx + qz*qz)
+	//   z' = 2(qy*qz + qw*qx)
+	return Vec3{
+		X: 2 * (q.X*q.Y - q.W*q.Z),
+		Y: 1 - 2*(q.X*q.X+q.Z*q.Z),
+		Z: 2 * (q.Y*q.Z + q.W*q.X),
 	}
 }
