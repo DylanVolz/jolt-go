@@ -1078,6 +1078,100 @@ func (c *Constraint) PathGetTotalLambdaPositionLimits() float32 {
 	return float32(C.JoltPathConstraintGetTotalLambdaPositionLimits(c.handle))
 }
 
+// --- Gear Constraint (T-0127) ---
+
+// CreateGearConstraint couples the rotation of two bodies via a gear ratio.
+// Must be paired with two HingeConstraints (one anchoring each body) so each
+// gear has a defined rotation axis. Use GearSetConstraints to register those
+// hinges with the gear so Jolt can correct numerical drift.
+//
+// hingeAxis1 / hingeAxis2: world-space rotation axes of the two gears (normalized).
+// ratio: defines Gear1Rotation(t) = -ratio * Gear2Rotation(t).
+// For a gear pair, ratio = numTeethGear2 / numTeethGear1.
+func (ps *PhysicsSystem) CreateGearConstraint(
+	bodyID1, bodyID2 *BodyID,
+	hingeAxis1, hingeAxis2 Vec3,
+	ratio float32,
+) *Constraint {
+	handle := C.JoltCreateGearConstraint(
+		ps.handle,
+		bodyID1.handle, bodyID2.handle,
+		C.float(hingeAxis1.X), C.float(hingeAxis1.Y), C.float(hingeAxis1.Z),
+		C.float(hingeAxis2.X), C.float(hingeAxis2.Y), C.float(hingeAxis2.Z),
+		C.float(ratio),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// GearSetConstraints associates the two hinge constraints constraining the
+// gears so Jolt can fix numerical rotation drift. Pass nil to clear a side.
+func (c *Constraint) GearSetConstraints(hinge1, hinge2 *Constraint) {
+	var h1, h2 C.JoltConstraint
+	if hinge1 != nil {
+		h1 = hinge1.handle
+	}
+	if hinge2 != nil {
+		h2 = hinge2.handle
+	}
+	C.JoltGearConstraintSetConstraints(c.handle, h1, h2)
+}
+
+// GearGetTotalLambda returns the angular impulse applied by the gear last step.
+func (c *Constraint) GearGetTotalLambda() float32 {
+	return float32(C.JoltGearConstraintGetTotalLambda(c.handle))
+}
+
+// --- Rack and Pinion Constraint (T-0127) ---
+
+// CreateRackAndPinionConstraint couples the rotation of a pinion (body 1) to
+// the translation of a rack (body 2). Must be paired with a HingeConstraint on
+// the pinion and a SliderConstraint on the rack; register them via
+// RackAndPinionSetConstraints so Jolt can correct numerical drift.
+//
+// hingeAxis: world-space rotation axis of the pinion (normalized).
+// sliderAxis: world-space sliding axis of the rack (normalized).
+// ratio: defines PinionRotation(t) = ratio * RackTranslation(t).
+// Compute as 2*PI * numTeethRack / (rackLength * numTeethPinion), or use
+// RackAndPinionRatio.
+func (ps *PhysicsSystem) CreateRackAndPinionConstraint(
+	pinionBodyID, rackBodyID *BodyID,
+	hingeAxis, sliderAxis Vec3,
+	ratio float32,
+) *Constraint {
+	handle := C.JoltCreateRackAndPinionConstraint(
+		ps.handle,
+		pinionBodyID.handle, rackBodyID.handle,
+		C.float(hingeAxis.X), C.float(hingeAxis.Y), C.float(hingeAxis.Z),
+		C.float(sliderAxis.X), C.float(sliderAxis.Y), C.float(sliderAxis.Z),
+		C.float(ratio),
+	)
+	if handle == nil {
+		return nil
+	}
+	return &Constraint{handle: handle}
+}
+
+// RackAndPinionSetConstraints associates the pinion hinge and rack slider so
+// Jolt can fix numerical position drift. Pass nil to clear a side.
+func (c *Constraint) RackAndPinionSetConstraints(pinionHinge, rackSlider *Constraint) {
+	var p, r C.JoltConstraint
+	if pinionHinge != nil {
+		p = pinionHinge.handle
+	}
+	if rackSlider != nil {
+		r = rackSlider.handle
+	}
+	C.JoltRackAndPinionConstraintSetConstraints(c.handle, p, r)
+}
+
+// RackAndPinionGetTotalLambda returns the impulse applied by the constraint last step.
+func (c *Constraint) RackAndPinionGetTotalLambda() float32 {
+	return float32(C.JoltRackAndPinionConstraintGetTotalLambda(c.handle))
+}
+
 // --- Buoyancy ---
 
 // ApplyBuoyancyImpulse applies buoyancy and drag forces to a body using surface plane detection.

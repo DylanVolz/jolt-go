@@ -24,6 +24,8 @@
 using namespace JPH;
 
 #include <Jolt/Physics/Constraints/PulleyConstraint.h>
+#include <Jolt/Physics/Constraints/GearConstraint.h>
+#include <Jolt/Physics/Constraints/RackAndPinionConstraint.h>
 // --- Helper: resolve bodies from system + body IDs ---
 // Returns false if either body lock fails.
 static bool LockTwoBodies(PhysicsSystem *ps, const BodyID &bid1, const BodyID &bid2,
@@ -1146,6 +1148,97 @@ float JoltPathConstraintGetTotalLambdaPositionLimits(JoltConstraint constraint)
 {
     PathConstraint *c = static_cast<PathConstraint *>(constraint);
     return c->GetTotalLambdaPositionLimits();
+}
+
+// --- Gear Constraint (T-0127) ---
+
+JoltConstraint JoltCreateGearConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float hingeAxis1X, float hingeAxis1Y, float hingeAxis1Z,
+    float hingeAxis2X, float hingeAxis2Y, float hingeAxis2Z,
+    float ratio)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    GearConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    settings.mHingeAxis1 = Vec3(hingeAxis1X, hingeAxis1Y, hingeAxis1Z);
+    settings.mHingeAxis2 = Vec3(hingeAxis2X, hingeAxis2Y, hingeAxis2Z);
+    settings.mRatio = ratio;
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltGearConstraintSetConstraints(JoltConstraint gear,
+                                       JoltConstraint hinge1, JoltConstraint hinge2)
+{
+    GearConstraint *g = static_cast<GearConstraint *>(gear);
+    Constraint *h1 = static_cast<Constraint *>(hinge1);
+    Constraint *h2 = static_cast<Constraint *>(hinge2);
+    g->SetConstraints(h1, h2);
+}
+
+float JoltGearConstraintGetTotalLambda(JoltConstraint gear)
+{
+    GearConstraint *g = static_cast<GearConstraint *>(gear);
+    return g->GetTotalLambda();
+}
+
+// --- Rack and Pinion Constraint (T-0127) ---
+
+JoltConstraint JoltCreateRackAndPinionConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID pinionBodyID, JoltBodyID rackBodyID,
+    float hingeAxisX, float hingeAxisY, float hingeAxisZ,
+    float sliderAxisX, float sliderAxisY, float sliderAxisZ,
+    float ratio)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *pid = static_cast<const BodyID *>(pinionBodyID);
+    const BodyID *rid = static_cast<const BodyID *>(rackBodyID);
+
+    RackAndPinionConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    settings.mHingeAxis = Vec3(hingeAxisX, hingeAxisY, hingeAxisZ);
+    settings.mSliderAxis = Vec3(sliderAxisX, sliderAxisY, sliderAxisZ);
+    settings.mRatio = ratio;
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *pid);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *rid);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltRackAndPinionConstraintSetConstraints(JoltConstraint rackAndPinion,
+                                                JoltConstraint pinionHinge,
+                                                JoltConstraint rackSlider)
+{
+    RackAndPinionConstraint *rp = static_cast<RackAndPinionConstraint *>(rackAndPinion);
+    Constraint *p = static_cast<Constraint *>(pinionHinge);
+    Constraint *r = static_cast<Constraint *>(rackSlider);
+    rp->SetConstraints(p, r);
+}
+
+float JoltRackAndPinionConstraintGetTotalLambda(JoltConstraint rackAndPinion)
+{
+    RackAndPinionConstraint *rp = static_cast<RackAndPinionConstraint *>(rackAndPinion);
+    return rp->GetTotalLambda();
 }
 
 // --- Buoyancy ---
