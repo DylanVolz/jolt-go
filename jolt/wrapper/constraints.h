@@ -458,6 +458,53 @@ void JoltPathConstraintSetPositionMotorSettings(JoltConstraint constraint,
 float JoltPathConstraintGetTotalLambdaMotor(JoltConstraint constraint);
 float JoltPathConstraintGetTotalLambdaPositionLimits(JoltConstraint constraint);
 
+// --- Gear Constraint (T-0127) ---
+
+// Create a gear constraint that couples the rotation of two bodies.
+// Must be used in conjunction with two hinge constraints (one per body).
+// hingeAxis1/hingeAxis2: world-space rotation axes of the two gears (normalized).
+// ratio: gear ratio. Defines Gear1Rotation(t) = -ratio * Gear2Rotation(t).
+//        Compute as numTeethGear2 / numTeethGear1.
+JoltConstraint JoltCreateGearConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float hingeAxis1X, float hingeAxis1Y, float hingeAxis1Z,
+    float hingeAxis2X, float hingeAxis2Y, float hingeAxis2Z,
+    float ratio);
+
+// Optional: associate the two hinge constraints used by the gear so Jolt can
+// fix numerical drift. Pass null for either to clear that side.
+void JoltGearConstraintSetConstraints(JoltConstraint gear,
+                                       JoltConstraint hinge1, JoltConstraint hinge2);
+
+// Get the angular impulse applied to satisfy the gear constraint last step.
+float JoltGearConstraintGetTotalLambda(JoltConstraint gear);
+
+// --- Rack and Pinion Constraint (T-0127) ---
+
+// Create a rack-and-pinion constraint coupling rotation of a pinion (body 1)
+// to translation of a rack (body 2). Must be used in conjunction with a hinge
+// constraint on the pinion and a slider constraint on the rack.
+// hingeAxis: world-space rotation axis of the pinion (normalized).
+// sliderAxis: world-space sliding axis of the rack (normalized).
+// ratio: PinionRotation(t) = ratio * RackTranslation(t).
+//        Compute as 2*PI * numTeethRack / (rackLength * numTeethPinion).
+JoltConstraint JoltCreateRackAndPinionConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID pinionBodyID, JoltBodyID rackBodyID,
+    float hingeAxisX, float hingeAxisY, float hingeAxisZ,
+    float sliderAxisX, float sliderAxisY, float sliderAxisZ,
+    float ratio);
+
+// Optional: associate the pinion hinge and rack slider so Jolt can fix
+// numerical drift. Pass null for either to clear that side.
+void JoltRackAndPinionConstraintSetConstraints(JoltConstraint rackAndPinion,
+                                                JoltConstraint pinionHinge,
+                                                JoltConstraint rackSlider);
+
+// Get the impulse applied to satisfy the rack-and-pinion constraint last step.
+float JoltRackAndPinionConstraintGetTotalLambda(JoltConstraint rackAndPinion);
+
 // --- Buoyancy (Body-level API) ---
 
 // Apply buoyancy impulse using surface plane detection (simple overload).

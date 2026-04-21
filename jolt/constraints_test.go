@@ -484,3 +484,205 @@ func rotateY(q Quat) Vec3 {
 		Z: 2 * (q.Y*q.Z + q.W*q.X),
 	}
 }
+
+func TestGearConstraint(t *testing.T) {
+	ps := NewPhysicsSystem()
+	defer ps.Destroy()
+
+	bi := ps.GetBodyInterface()
+
+	// Static "world" anchor at origin.
+	anchorShape := CreateBox(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
+	defer anchorShape.Destroy()
+	anchor := bi.CreateBody(anchorShape, Vec3{X: 0, Y: 0, Z: 0}, MotionTypeStatic, false)
+	defer bi.RemoveAndDestroyBody(anchor)
+
+	// Two dynamic gear bodies, each anchored by a hinge to the static body.
+	// They are spheres so center-of-mass is on the hinge axis (no gravity torque).
+	gearShape := CreateSphere(0.5)
+	defer gearShape.Destroy()
+
+	const (
+		gear1X float32 = -2
+		gear2X float32 = 2
+		gearY  float32 = 0
+		ratio  float32 = 0.5 // ω1 = -0.5 * ω2
+	)
+
+	gear1 := bi.CreateBody(gearShape, Vec3{X: gear1X, Y: gearY, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(gear1)
+	gear2 := bi.CreateBody(gearShape, Vec3{X: gear2X, Y: gearY, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(gear2)
+
+	// Disable gravity so the hinges/gear are the only forces in play.
+	bi.SetGravityFactor(gear1, 0)
+	bi.SetGravityFactor(gear2, 0)
+	ps.SetAngularDamping(gear1, 0)
+	ps.SetAngularDamping(gear2, 0)
+	bi.ActivateBody(gear1)
+	bi.ActivateBody(gear2)
+
+	yAxis := Vec3{X: 0, Y: 1, Z: 0}
+	xAxis := Vec3{X: 1, Y: 0, Z: 0}
+
+	hinge1 := ps.CreateHingeConstraint(anchor, gear1,
+		Vec3{X: gear1X, Y: gearY, Z: 0}, yAxis, xAxis, 0, 0)
+	if hinge1 == nil {
+		t.Fatal("CreateHingeConstraint(gear1) returned nil")
+	}
+	defer hinge1.Destroy()
+	ps.AddConstraint(hinge1)
+	defer ps.RemoveConstraint(hinge1)
+
+	hinge2 := ps.CreateHingeConstraint(anchor, gear2,
+		Vec3{X: gear2X, Y: gearY, Z: 0}, yAxis, xAxis, 0, 0)
+	if hinge2 == nil {
+		t.Fatal("CreateHingeConstraint(gear2) returned nil")
+	}
+	defer hinge2.Destroy()
+	ps.AddConstraint(hinge2)
+	defer ps.RemoveConstraint(hinge2)
+
+	// Drive gear1 at a fixed angular velocity via its hinge motor.
+	const driveOmega float32 = 4.0 // rad/s about +Y on gear1
+	hinge1.HingeSetMotorSettings(2.0, 1.0, 1e8, 1e8)
+	hinge1.HingeSetMotorState(MotorStateVelocity)
+	hinge1.HingeSetTargetAngularVelocity(driveOmega)
+
+	// Couple the two gears.
+	gear := ps.CreateGearConstraint(gear1, gear2, yAxis, yAxis, ratio)
+	if gear == nil {
+		t.Fatal("CreateGearConstraint returned nil")
+	}
+	defer gear.Destroy()
+	ps.AddConstraint(gear)
+	defer ps.RemoveConstraint(gear)
+	gear.GearSetConstraints(hinge1, hinge2)
+
+	// Step long enough for the motor + constraint to settle.
+	const dt float32 = 1.0 / 120.0
+	for range 240 {
+		ps.Update(dt)
+	}
+
+	omega1 := bi.GetAngularVelocity(gear1)
+	omega2 := bi.GetAngularVelocity(gear2)
+
+	// Gear constraint: ω1 = -ratio * ω2  ⇒  ω2 = -ω1/ratio.
+	expectedOmega2 := -omega1.Y / ratio
+
+	if math.Abs(float64(omega1.Y-driveOmega)) > 0.5 {
+		t.Errorf("gear1 ω.Y = %.3f, expected ~%.3f", omega1.Y, driveOmega)
+	}
+	if math.Abs(float64(omega2.Y-expectedOmega2)) > 0.5 {
+		t.Errorf("gear2 ω.Y = %.3f, expected ~%.3f (ω1=%.3f, ratio=%.3f)",
+			omega2.Y, expectedOmega2, omega1.Y, ratio)
+	}
+
+	// Sign check: with ratio > 0, the two gears must rotate in opposite directions.
+	if omega1.Y*omega2.Y >= 0 {
+		t.Errorf("gear1 and gear2 should counter-rotate, got ω1=%.3f, ω2=%.3f",
+			omega1.Y, omega2.Y)
+	}
+}
+
+// TestRackAndPinionConstraint verifies that a rack-and-pinion constraint
+// couples a pinion's rotation to a rack's translation per ω = ratio * v.
+func TestRackAndPinionConstraint(t *testing.T) {
+	ps := NewPhysicsSystem()
+	defer ps.Destroy()
+
+	bi := ps.GetBodyInterface()
+
+	anchorShape := CreateBox(Vec3{X: 0.5, Y: 0.5, Z: 0.5})
+	defer anchorShape.Destroy()
+	anchor := bi.CreateBody(anchorShape, Vec3{X: 0, Y: 0, Z: 0}, MotionTypeStatic, false)
+	defer bi.RemoveAndDestroyBody(anchor)
+
+	pinionShape := CreateSphere(0.5)
+	defer pinionShape.Destroy()
+	rackShape := CreateBox(Vec3{X: 1, Y: 0.25, Z: 0.25})
+	defer rackShape.Destroy()
+
+	const (
+		pinionX float32 = 0
+		pinionY float32 = 0
+		rackX   float32 = 0
+		rackY   float32 = 2
+		ratio   float32 = 1.0 // 1 rad of pinion per 1 m of rack
+	)
+
+	pinion := bi.CreateBody(pinionShape, Vec3{X: pinionX, Y: pinionY, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(pinion)
+	rack := bi.CreateBody(rackShape, Vec3{X: rackX, Y: rackY, Z: 0}, MotionTypeDynamic, false)
+	defer bi.RemoveAndDestroyBody(rack)
+
+	bi.SetGravityFactor(pinion, 0)
+	bi.SetGravityFactor(rack, 0)
+	ps.SetAngularDamping(pinion, 0)
+	ps.SetLinearDamping(rack, 0)
+	ps.SetAngularDamping(rack, 0)
+	bi.ActivateBody(pinion)
+	bi.ActivateBody(rack)
+
+	yAxis := Vec3{X: 0, Y: 1, Z: 0}
+	xAxis := Vec3{X: 1, Y: 0, Z: 0}
+
+	pinionHinge := ps.CreateHingeConstraint(anchor, pinion,
+		Vec3{X: pinionX, Y: pinionY, Z: 0}, yAxis, xAxis, 0, 0)
+	if pinionHinge == nil {
+		t.Fatal("CreateHingeConstraint(pinion) returned nil")
+	}
+	defer pinionHinge.Destroy()
+	ps.AddConstraint(pinionHinge)
+	defer ps.RemoveConstraint(pinionHinge)
+
+	rackSlider := ps.CreateSliderConstraint(anchor, rack,
+		Vec3{X: rackX, Y: rackY, Z: 0}, xAxis, 0, 0)
+	if rackSlider == nil {
+		t.Fatal("CreateSliderConstraint(rack) returned nil")
+	}
+	defer rackSlider.Destroy()
+	ps.AddConstraint(rackSlider)
+	defer ps.RemoveConstraint(rackSlider)
+
+	// Drive the pinion at a fixed angular velocity via its hinge motor.
+	const driveOmega float32 = 3.0
+	pinionHinge.HingeSetMotorSettings(2.0, 1.0, 1e8, 1e8)
+	pinionHinge.HingeSetMotorState(MotorStateVelocity)
+	pinionHinge.HingeSetTargetAngularVelocity(driveOmega)
+
+	// Couple pinion (around yAxis) and rack (along xAxis).
+	rp := ps.CreateRackAndPinionConstraint(pinion, rack, yAxis, xAxis, ratio)
+	if rp == nil {
+		t.Fatal("CreateRackAndPinionConstraint returned nil")
+	}
+	defer rp.Destroy()
+	ps.AddConstraint(rp)
+	defer ps.RemoveConstraint(rp)
+	rp.RackAndPinionSetConstraints(pinionHinge, rackSlider)
+
+	const dt float32 = 1.0 / 120.0
+	for range 240 {
+		ps.Update(dt)
+	}
+
+	pinionOmega := bi.GetAngularVelocity(pinion)
+	rackVel := bi.GetLinearVelocity(rack)
+
+	// Rack-and-pinion: ω_pinion = ratio * v_rack ⇒ v_rack = ω_pinion / ratio.
+	expectedRackVel := pinionOmega.Y / ratio
+
+	if math.Abs(float64(pinionOmega.Y-driveOmega)) > 0.5 {
+		t.Errorf("pinion ω.Y = %.3f, expected ~%.3f", pinionOmega.Y, driveOmega)
+	}
+	if math.Abs(float64(rackVel.X-expectedRackVel)) > 0.5 {
+		t.Errorf("rack v.X = %.3f, expected ~%.3f (ω=%.3f, ratio=%.3f)",
+			rackVel.X, expectedRackVel, pinionOmega.Y, ratio)
+	}
+
+	// Rack should not have appreciable motion off-axis.
+	if math.Abs(float64(rackVel.Y)) > 0.2 || math.Abs(float64(rackVel.Z)) > 0.2 {
+		t.Errorf("rack velocity off-axis: v=(%.3f, %.3f, %.3f)", rackVel.X, rackVel.Y, rackVel.Z)
+	}
+}
