@@ -1,8 +1,8 @@
 /*
- * Jolt Physics C Wrapper - Constraints & Buoyancy (T-0105)
+ * Jolt Physics C Wrapper - Constraints & Buoyancy (T-0105, T-0122, T-0123)
  *
- * Constraint types: Distance, Hinge, Slider, Fixed
- * Motor control for Hinge and Slider constraints
+ * Constraint types: Distance, Hinge, Slider, Fixed, SwingTwist, SixDOF
+ * Motor control for Hinge, Slider, SwingTwist, and SixDOF constraints
  * Buoyancy impulse application via Body
  */
 
@@ -145,6 +145,160 @@ void JoltFixedConstraintGetTotalLambdaPosition(JoltConstraint constraint,
                                                 float* x, float* y, float* z);
 void JoltFixedConstraintGetTotalLambdaRotation(JoltConstraint constraint,
                                                 float* x, float* y, float* z);
+
+// --- SwingTwist Constraint (T-0123) ---
+
+// Matches Jolt ESwingType
+typedef enum {
+    JoltSwingTypeCone = 0,
+    JoltSwingTypePyramid = 1
+} JoltSwingType;
+
+// Create a swing-twist constraint between two bodies (humanoid joint).
+// position: world-space attachment point (used for both bodies)
+// twistAxis: world-space twist axis (normalized) - shared by both bodies
+// planeAxis: world-space plane axis perpendicular to twist (normalized) - shared
+// normalHalfConeAngle/planeHalfConeAngle: swing limits in radians
+// twistMinAngle/twistMaxAngle: twist limits in radians, in [-PI, PI]
+JoltConstraint JoltCreateSwingTwistConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float positionX, float positionY, float positionZ,
+    float twistAxisX, float twistAxisY, float twistAxisZ,
+    float planeAxisX, float planeAxisY, float planeAxisZ,
+    float normalHalfConeAngle, float planeHalfConeAngle,
+    float twistMinAngle, float twistMaxAngle,
+    JoltSwingType swingType);
+
+// Limit accessors
+void JoltSwingTwistSetNormalHalfConeAngle(JoltConstraint c, float angle);
+float JoltSwingTwistGetNormalHalfConeAngle(JoltConstraint c);
+void JoltSwingTwistSetPlaneHalfConeAngle(JoltConstraint c, float angle);
+float JoltSwingTwistGetPlaneHalfConeAngle(JoltConstraint c);
+void JoltSwingTwistSetTwistMinAngle(JoltConstraint c, float angle);
+float JoltSwingTwistGetTwistMinAngle(JoltConstraint c);
+void JoltSwingTwistSetTwistMaxAngle(JoltConstraint c, float angle);
+float JoltSwingTwistGetTwistMaxAngle(JoltConstraint c);
+
+// Friction (when motor is off)
+void JoltSwingTwistSetMaxFrictionTorque(JoltConstraint c, float torque);
+float JoltSwingTwistGetMaxFrictionTorque(JoltConstraint c);
+
+// Motor controls (mirrors hinge motor pattern from T-0105)
+void JoltSwingTwistSetSwingMotorState(JoltConstraint c, JoltMotorState state);
+int JoltSwingTwistGetSwingMotorState(JoltConstraint c);
+void JoltSwingTwistSetTwistMotorState(JoltConstraint c, JoltMotorState state);
+int JoltSwingTwistGetTwistMotorState(JoltConstraint c);
+
+// Target angular velocity in body 2 constraint space
+void JoltSwingTwistSetTargetAngularVelocityCS(JoltConstraint c, float x, float y, float z);
+void JoltSwingTwistGetTargetAngularVelocityCS(JoltConstraint c, float *x, float *y, float *z);
+
+// Target orientation in constraint space (drives constraint to inOrientation)
+void JoltSwingTwistSetTargetOrientationCS(JoltConstraint c, float qx, float qy, float qz, float qw);
+void JoltSwingTwistGetTargetOrientationCS(JoltConstraint c, float *qx, float *qy, float *qz, float *qw);
+
+// Current rotation of body 2 relative to body 1 in constraint space
+void JoltSwingTwistGetRotationInConstraintSpace(JoltConstraint c,
+                                                 float *qx, float *qy, float *qz, float *qw);
+
+// Motor settings
+void JoltSwingTwistSetSwingMotorSettings(JoltConstraint c,
+                                          float frequency, float damping,
+                                          float forceLimit, float torqueLimit);
+void JoltSwingTwistSetTwistMotorSettings(JoltConstraint c,
+                                          float frequency, float damping,
+                                          float forceLimit, float torqueLimit);
+
+// Force readback
+void JoltSwingTwistGetTotalLambdaPosition(JoltConstraint c, float *x, float *y, float *z);
+float JoltSwingTwistGetTotalLambdaTwist(JoltConstraint c);
+float JoltSwingTwistGetTotalLambdaSwingY(JoltConstraint c);
+float JoltSwingTwistGetTotalLambdaSwingZ(JoltConstraint c);
+void JoltSwingTwistGetTotalLambdaMotor(JoltConstraint c, float *x, float *y, float *z);
+
+// --- SixDOF Constraint (T-0123) ---
+
+// Matches Jolt SixDOFConstraintSettings::EAxis
+typedef enum {
+    JoltSixDOFAxisTranslationX = 0,
+    JoltSixDOFAxisTranslationY = 1,
+    JoltSixDOFAxisTranslationZ = 2,
+    JoltSixDOFAxisRotationX = 3,
+    JoltSixDOFAxisRotationY = 4,
+    JoltSixDOFAxisRotationZ = 5
+} JoltSixDOFAxis;
+
+// Create a 6-DOF constraint between two bodies.
+// position: world-space attachment point (used for both bodies)
+// axisX: world-space X axis of the constraint frame
+// axisY: world-space Y axis of the constraint frame (must be perpendicular to axisX)
+// limitMin/limitMax: arrays of 6 floats indexed by JoltSixDOFAxis.
+//   - Free axis: min = -FLT_MAX, max = FLT_MAX
+//   - Fixed axis: min = FLT_MAX, max = -FLT_MAX (driven to 0)
+//   - Limited axis: any other valid range
+JoltConstraint JoltCreateSixDOFConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float positionX, float positionY, float positionZ,
+    float axisXx, float axisXy, float axisXz,
+    float axisYx, float axisYy, float axisYz,
+    const float *limitMin,
+    const float *limitMax,
+    JoltSwingType swingType);
+
+// Limits
+void JoltSixDOFSetTranslationLimits(JoltConstraint c,
+                                     float minX, float minY, float minZ,
+                                     float maxX, float maxY, float maxZ);
+void JoltSixDOFSetRotationLimits(JoltConstraint c,
+                                  float minX, float minY, float minZ,
+                                  float maxX, float maxY, float maxZ);
+float JoltSixDOFGetLimitsMin(JoltConstraint c, JoltSixDOFAxis axis);
+float JoltSixDOFGetLimitsMax(JoltConstraint c, JoltSixDOFAxis axis);
+int JoltSixDOFIsFixedAxis(JoltConstraint c, JoltSixDOFAxis axis);
+int JoltSixDOFIsFreeAxis(JoltConstraint c, JoltSixDOFAxis axis);
+
+// Friction
+void JoltSixDOFSetMaxFriction(JoltConstraint c, JoltSixDOFAxis axis, float friction);
+float JoltSixDOFGetMaxFriction(JoltConstraint c, JoltSixDOFAxis axis);
+
+// Motor controls (per-axis state)
+void JoltSixDOFSetMotorState(JoltConstraint c, JoltSixDOFAxis axis, JoltMotorState state);
+int JoltSixDOFGetMotorState(JoltConstraint c, JoltSixDOFAxis axis);
+
+// Motor settings (per-axis)
+void JoltSixDOFSetMotorSettings(JoltConstraint c, JoltSixDOFAxis axis,
+                                 float frequency, float damping,
+                                 float forceLimit, float torqueLimit);
+
+// Target velocity in body 1 constraint space
+void JoltSixDOFSetTargetVelocityCS(JoltConstraint c, float x, float y, float z);
+void JoltSixDOFGetTargetVelocityCS(JoltConstraint c, float *x, float *y, float *z);
+
+// Target angular velocity in body 2 constraint space (NB: body 2, not body 1)
+void JoltSixDOFSetTargetAngularVelocityCS(JoltConstraint c, float x, float y, float z);
+void JoltSixDOFGetTargetAngularVelocityCS(JoltConstraint c, float *x, float *y, float *z);
+
+// Target position in body 1 constraint space
+void JoltSixDOFSetTargetPositionCS(JoltConstraint c, float x, float y, float z);
+void JoltSixDOFGetTargetPositionCS(JoltConstraint c, float *x, float *y, float *z);
+
+// Target orientation in body 1 constraint space
+void JoltSixDOFSetTargetOrientationCS(JoltConstraint c,
+                                       float qx, float qy, float qz, float qw);
+void JoltSixDOFGetTargetOrientationCS(JoltConstraint c,
+                                       float *qx, float *qy, float *qz, float *qw);
+
+// Current rotation in constraint space
+void JoltSixDOFGetRotationInConstraintSpace(JoltConstraint c,
+                                             float *qx, float *qy, float *qz, float *qw);
+
+// Force readback
+void JoltSixDOFGetTotalLambdaPosition(JoltConstraint c, float *x, float *y, float *z);
+void JoltSixDOFGetTotalLambdaRotation(JoltConstraint c, float *x, float *y, float *z);
+void JoltSixDOFGetTotalLambdaMotorTranslation(JoltConstraint c, float *x, float *y, float *z);
+void JoltSixDOFGetTotalLambdaMotorRotation(JoltConstraint c, float *x, float *y, float *z);
 
 // --- Buoyancy (Body-level API) ---
 

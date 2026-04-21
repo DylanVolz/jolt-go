@@ -1,5 +1,5 @@
 /*
- * Jolt Physics C Wrapper - Constraints & Buoyancy Implementation (T-0105)
+ * Jolt Physics C Wrapper - Constraints & Buoyancy Implementation (T-0105, T-0122, T-0123)
  */
 
 #include "constraints.h"
@@ -13,6 +13,8 @@
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 
 using namespace JPH;
 
@@ -407,6 +409,394 @@ void JoltFixedConstraintGetTotalLambdaRotation(JoltConstraint constraint,
     *x = lambda.GetX();
     *y = lambda.GetY();
     *z = lambda.GetZ();
+}
+
+// --- SwingTwist Constraint (T-0123) ---
+
+JoltConstraint JoltCreateSwingTwistConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float positionX, float positionY, float positionZ,
+    float twistAxisX, float twistAxisY, float twistAxisZ,
+    float planeAxisX, float planeAxisY, float planeAxisZ,
+    float normalHalfConeAngle, float planeHalfConeAngle,
+    float twistMinAngle, float twistMaxAngle,
+    JoltSwingType swingType)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    SwingTwistConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    RVec3 pos(positionX, positionY, positionZ);
+    Vec3 twist(twistAxisX, twistAxisY, twistAxisZ);
+    Vec3 plane(planeAxisX, planeAxisY, planeAxisZ);
+    settings.mPosition1 = pos;
+    settings.mPosition2 = pos;
+    settings.mTwistAxis1 = twist;
+    settings.mTwistAxis2 = twist;
+    settings.mPlaneAxis1 = plane;
+    settings.mPlaneAxis2 = plane;
+    settings.mNormalHalfConeAngle = normalHalfConeAngle;
+    settings.mPlaneHalfConeAngle = planeHalfConeAngle;
+    settings.mTwistMinAngle = twistMinAngle;
+    settings.mTwistMaxAngle = twistMaxAngle;
+    settings.mSwingType = static_cast<ESwingType>(swingType);
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltSwingTwistSetNormalHalfConeAngle(JoltConstraint c, float angle)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetNormalHalfConeAngle(angle);
+}
+
+float JoltSwingTwistGetNormalHalfConeAngle(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetNormalHalfConeAngle();
+}
+
+void JoltSwingTwistSetPlaneHalfConeAngle(JoltConstraint c, float angle)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetPlaneHalfConeAngle(angle);
+}
+
+float JoltSwingTwistGetPlaneHalfConeAngle(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetPlaneHalfConeAngle();
+}
+
+void JoltSwingTwistSetTwistMinAngle(JoltConstraint c, float angle)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetTwistMinAngle(angle);
+}
+
+float JoltSwingTwistGetTwistMinAngle(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetTwistMinAngle();
+}
+
+void JoltSwingTwistSetTwistMaxAngle(JoltConstraint c, float angle)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetTwistMaxAngle(angle);
+}
+
+float JoltSwingTwistGetTwistMaxAngle(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetTwistMaxAngle();
+}
+
+void JoltSwingTwistSetMaxFrictionTorque(JoltConstraint c, float torque)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetMaxFrictionTorque(torque);
+}
+
+float JoltSwingTwistGetMaxFrictionTorque(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetMaxFrictionTorque();
+}
+
+void JoltSwingTwistSetSwingMotorState(JoltConstraint c, JoltMotorState state)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetSwingMotorState(static_cast<EMotorState>(state));
+}
+
+int JoltSwingTwistGetSwingMotorState(JoltConstraint c)
+{
+    return static_cast<int>(static_cast<SwingTwistConstraint *>(c)->GetSwingMotorState());
+}
+
+void JoltSwingTwistSetTwistMotorState(JoltConstraint c, JoltMotorState state)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetTwistMotorState(static_cast<EMotorState>(state));
+}
+
+int JoltSwingTwistGetTwistMotorState(JoltConstraint c)
+{
+    return static_cast<int>(static_cast<SwingTwistConstraint *>(c)->GetTwistMotorState());
+}
+
+void JoltSwingTwistSetTargetAngularVelocityCS(JoltConstraint c, float x, float y, float z)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetTargetAngularVelocityCS(Vec3(x, y, z));
+}
+
+void JoltSwingTwistGetTargetAngularVelocityCS(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SwingTwistConstraint *>(c)->GetTargetAngularVelocityCS();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSwingTwistSetTargetOrientationCS(JoltConstraint c, float qx, float qy, float qz, float qw)
+{
+    static_cast<SwingTwistConstraint *>(c)->SetTargetOrientationCS(Quat(qx, qy, qz, qw));
+}
+
+void JoltSwingTwistGetTargetOrientationCS(JoltConstraint c, float *qx, float *qy, float *qz, float *qw)
+{
+    Quat q = static_cast<SwingTwistConstraint *>(c)->GetTargetOrientationCS();
+    *qx = q.GetX(); *qy = q.GetY(); *qz = q.GetZ(); *qw = q.GetW();
+}
+
+void JoltSwingTwistGetRotationInConstraintSpace(JoltConstraint c,
+                                                 float *qx, float *qy, float *qz, float *qw)
+{
+    Quat q = static_cast<SwingTwistConstraint *>(c)->GetRotationInConstraintSpace();
+    *qx = q.GetX(); *qy = q.GetY(); *qz = q.GetZ(); *qw = q.GetW();
+}
+
+void JoltSwingTwistSetSwingMotorSettings(JoltConstraint c,
+                                          float frequency, float damping,
+                                          float forceLimit, float torqueLimit)
+{
+    SwingTwistConstraint *st = static_cast<SwingTwistConstraint *>(c);
+    MotorSettings &ms = st->GetSwingMotorSettings();
+    ms.mSpringSettings = SpringSettings(ESpringMode::FrequencyAndDamping, frequency, damping);
+    ms.SetForceLimit(forceLimit);
+    ms.SetTorqueLimit(torqueLimit);
+}
+
+void JoltSwingTwistSetTwistMotorSettings(JoltConstraint c,
+                                          float frequency, float damping,
+                                          float forceLimit, float torqueLimit)
+{
+    SwingTwistConstraint *st = static_cast<SwingTwistConstraint *>(c);
+    MotorSettings &ms = st->GetTwistMotorSettings();
+    ms.mSpringSettings = SpringSettings(ESpringMode::FrequencyAndDamping, frequency, damping);
+    ms.SetForceLimit(forceLimit);
+    ms.SetTorqueLimit(torqueLimit);
+}
+
+void JoltSwingTwistGetTotalLambdaPosition(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SwingTwistConstraint *>(c)->GetTotalLambdaPosition();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+float JoltSwingTwistGetTotalLambdaTwist(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetTotalLambdaTwist();
+}
+
+float JoltSwingTwistGetTotalLambdaSwingY(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetTotalLambdaSwingY();
+}
+
+float JoltSwingTwistGetTotalLambdaSwingZ(JoltConstraint c)
+{
+    return static_cast<SwingTwistConstraint *>(c)->GetTotalLambdaSwingZ();
+}
+
+void JoltSwingTwistGetTotalLambdaMotor(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SwingTwistConstraint *>(c)->GetTotalLambdaMotor();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+// --- SixDOF Constraint (T-0123) ---
+
+static SixDOFConstraintSettings::EAxis ToSixDOFAxis(JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraintSettings::EAxis>(axis);
+}
+
+JoltConstraint JoltCreateSixDOFConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    float positionX, float positionY, float positionZ,
+    float axisXx, float axisXy, float axisXz,
+    float axisYx, float axisYy, float axisYz,
+    const float *limitMin,
+    const float *limitMax,
+    JoltSwingType swingType)
+{
+    PhysicsSystemWrapper *wrapper = static_cast<PhysicsSystemWrapper *>(system);
+    PhysicsSystem *ps = GetPhysicsSystem(wrapper);
+    const BodyID *bid1 = static_cast<const BodyID *>(bodyID1);
+    const BodyID *bid2 = static_cast<const BodyID *>(bodyID2);
+
+    SixDOFConstraintSettings settings;
+    settings.mSpace = EConstraintSpace::WorldSpace;
+    RVec3 pos(positionX, positionY, positionZ);
+    Vec3 ax(axisXx, axisXy, axisXz);
+    Vec3 ay(axisYx, axisYy, axisYz);
+    settings.mPosition1 = pos;
+    settings.mPosition2 = pos;
+    settings.mAxisX1 = ax;
+    settings.mAxisX2 = ax;
+    settings.mAxisY1 = ay;
+    settings.mAxisY2 = ay;
+    settings.mSwingType = static_cast<ESwingType>(swingType);
+
+    for (int i = 0; i < SixDOFConstraintSettings::EAxis::Num; ++i)
+    {
+        settings.mLimitMin[i] = limitMin[i];
+        settings.mLimitMax[i] = limitMax[i];
+    }
+
+    BodyLockWrite lock1(ps->GetBodyLockInterface(), *bid1);
+    BodyLockWrite lock2(ps->GetBodyLockInterface(), *bid2);
+    if (!lock1.Succeeded() || !lock2.Succeeded())
+        return nullptr;
+
+    TwoBodyConstraint *constraint = settings.Create(lock1.GetBody(), lock2.GetBody());
+    constraint->AddRef();
+    return static_cast<JoltConstraint>(constraint);
+}
+
+void JoltSixDOFSetTranslationLimits(JoltConstraint c,
+                                     float minX, float minY, float minZ,
+                                     float maxX, float maxY, float maxZ)
+{
+    static_cast<SixDOFConstraint *>(c)->SetTranslationLimits(
+        Vec3(minX, minY, minZ), Vec3(maxX, maxY, maxZ));
+}
+
+void JoltSixDOFSetRotationLimits(JoltConstraint c,
+                                  float minX, float minY, float minZ,
+                                  float maxX, float maxY, float maxZ)
+{
+    static_cast<SixDOFConstraint *>(c)->SetRotationLimits(
+        Vec3(minX, minY, minZ), Vec3(maxX, maxY, maxZ));
+}
+
+float JoltSixDOFGetLimitsMin(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraint *>(c)->GetLimitsMin(ToSixDOFAxis(axis));
+}
+
+float JoltSixDOFGetLimitsMax(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraint *>(c)->GetLimitsMax(ToSixDOFAxis(axis));
+}
+
+int JoltSixDOFIsFixedAxis(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraint *>(c)->IsFixedAxis(ToSixDOFAxis(axis)) ? 1 : 0;
+}
+
+int JoltSixDOFIsFreeAxis(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraint *>(c)->IsFreeAxis(ToSixDOFAxis(axis)) ? 1 : 0;
+}
+
+void JoltSixDOFSetMaxFriction(JoltConstraint c, JoltSixDOFAxis axis, float friction)
+{
+    static_cast<SixDOFConstraint *>(c)->SetMaxFriction(ToSixDOFAxis(axis), friction);
+}
+
+float JoltSixDOFGetMaxFriction(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<SixDOFConstraint *>(c)->GetMaxFriction(ToSixDOFAxis(axis));
+}
+
+void JoltSixDOFSetMotorState(JoltConstraint c, JoltSixDOFAxis axis, JoltMotorState state)
+{
+    static_cast<SixDOFConstraint *>(c)->SetMotorState(ToSixDOFAxis(axis),
+                                                       static_cast<EMotorState>(state));
+}
+
+int JoltSixDOFGetMotorState(JoltConstraint c, JoltSixDOFAxis axis)
+{
+    return static_cast<int>(static_cast<SixDOFConstraint *>(c)->GetMotorState(ToSixDOFAxis(axis)));
+}
+
+void JoltSixDOFSetMotorSettings(JoltConstraint c, JoltSixDOFAxis axis,
+                                 float frequency, float damping,
+                                 float forceLimit, float torqueLimit)
+{
+    SixDOFConstraint *sd = static_cast<SixDOFConstraint *>(c);
+    MotorSettings &ms = sd->GetMotorSettings(ToSixDOFAxis(axis));
+    ms.mSpringSettings = SpringSettings(ESpringMode::FrequencyAndDamping, frequency, damping);
+    ms.SetForceLimit(forceLimit);
+    ms.SetTorqueLimit(torqueLimit);
+}
+
+void JoltSixDOFSetTargetVelocityCS(JoltConstraint c, float x, float y, float z)
+{
+    static_cast<SixDOFConstraint *>(c)->SetTargetVelocityCS(Vec3(x, y, z));
+}
+
+void JoltSixDOFGetTargetVelocityCS(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTargetVelocityCS();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFSetTargetAngularVelocityCS(JoltConstraint c, float x, float y, float z)
+{
+    static_cast<SixDOFConstraint *>(c)->SetTargetAngularVelocityCS(Vec3(x, y, z));
+}
+
+void JoltSixDOFGetTargetAngularVelocityCS(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTargetAngularVelocityCS();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFSetTargetPositionCS(JoltConstraint c, float x, float y, float z)
+{
+    static_cast<SixDOFConstraint *>(c)->SetTargetPositionCS(Vec3(x, y, z));
+}
+
+void JoltSixDOFGetTargetPositionCS(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTargetPositionCS();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFSetTargetOrientationCS(JoltConstraint c,
+                                       float qx, float qy, float qz, float qw)
+{
+    static_cast<SixDOFConstraint *>(c)->SetTargetOrientationCS(Quat(qx, qy, qz, qw));
+}
+
+void JoltSixDOFGetTargetOrientationCS(JoltConstraint c,
+                                       float *qx, float *qy, float *qz, float *qw)
+{
+    Quat q = static_cast<SixDOFConstraint *>(c)->GetTargetOrientationCS();
+    *qx = q.GetX(); *qy = q.GetY(); *qz = q.GetZ(); *qw = q.GetW();
+}
+
+void JoltSixDOFGetRotationInConstraintSpace(JoltConstraint c,
+                                             float *qx, float *qy, float *qz, float *qw)
+{
+    Quat q = static_cast<SixDOFConstraint *>(c)->GetRotationInConstraintSpace();
+    *qx = q.GetX(); *qy = q.GetY(); *qz = q.GetZ(); *qw = q.GetW();
+}
+
+void JoltSixDOFGetTotalLambdaPosition(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTotalLambdaPosition();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFGetTotalLambdaRotation(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTotalLambdaRotation();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFGetTotalLambdaMotorTranslation(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTotalLambdaMotorTranslation();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
+}
+
+void JoltSixDOFGetTotalLambdaMotorRotation(JoltConstraint c, float *x, float *y, float *z)
+{
+    Vec3 v = static_cast<SixDOFConstraint *>(c)->GetTotalLambdaMotorRotation();
+    *x = v.GetX(); *y = v.GetY(); *z = v.GetZ();
 }
 
 // --- Buoyancy ---
