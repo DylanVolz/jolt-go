@@ -19,6 +19,7 @@ extern "C" {
 // --- Opaque pointer types ---
 typedef void* JoltConstraint;
 typedef void* JoltConstraintSettings;
+typedef void* JoltPathConstraintPath;
 
 // --- Motor state enum (matches Jolt EMotorState) ---
 typedef enum {
@@ -26,6 +27,16 @@ typedef enum {
     JoltMotorStateVelocity = 1,
     JoltMotorStatePosition = 2
 } JoltMotorState;
+
+// --- Path rotation constraint type (matches Jolt EPathRotationConstraintType) ---
+typedef enum {
+    JoltPathRotationFree = 0,
+    JoltPathRotationConstrainAroundTangent = 1,
+    JoltPathRotationConstrainAroundNormal = 2,
+    JoltPathRotationConstrainAroundBinormal = 3,
+    JoltPathRotationConstrainToPath = 4,
+    JoltPathRotationFullyConstrained = 5
+} JoltPathRotationConstraintType;
 
 // --- PhysicsSystem constraint management ---
 
@@ -371,6 +382,81 @@ float JoltPulleyConstraintGetCurrentLength(JoltConstraint constraint);
 
 // Force readback (impulse applied this step)
 float JoltPulleyConstraintGetTotalLambdaPosition(JoltConstraint constraint);
+
+// --- Path Constraint (Hermite spline) ---
+
+// Create a Hermite-spline path from arrays of points.
+// Each point contributes: position (x,y,z), tangent (x,y,z, need not be normalized,
+// direction along path), normal (x,y,z, perpendicular to tangent — used together with
+// tangent to form the constraint basis).
+// pointCount must be >= 2. If isLooping != 0, first and last point are auto-connected
+// (they must not be identical).
+// Returns NULL on invalid input.
+JoltPathConstraintPath JoltCreateHermitePath(
+    const float* positions,   // length 3 * pointCount
+    const float* tangents,    // length 3 * pointCount
+    const float* normals,     // length 3 * pointCount
+    int pointCount,
+    int isLooping);
+
+// Release a path. Safe to call after JoltCreatePathConstraint has acquired its own
+// reference — Jolt ref-counts paths internally.
+void JoltDestroyPath(JoltPathConstraintPath path);
+
+// Returns the max fraction of the path (index-based: last point index for open paths,
+// point count for looping paths).
+float JoltPathGetMaxFraction(JoltPathConstraintPath path);
+
+// Evaluate position/tangent at a path fraction. Outputs may be NULL to skip.
+void JoltPathGetPointOnPath(
+    JoltPathConstraintPath path, float fraction,
+    float* outPosX, float* outPosY, float* outPosZ,
+    float* outTanX, float* outTanY, float* outTanZ);
+
+// Create a PathConstraint that binds bodyID2 to a path anchored on bodyID1.
+// pathPosition/pathRotation: position/rotation of path start relative to body1's
+//   world transform (pass identity quat {0,0,0,1} and zero position to anchor at body1).
+// pathFraction: initial fraction along path where body2 is attached (use
+//   JoltPathGetMaxFraction * t, or 0 to start at the beginning).
+// rotationConstraintType: see JoltPathRotationConstraintType.
+// maxFrictionForce: friction applied along path when motor is off (0 = frictionless).
+JoltConstraint JoltCreatePathConstraint(
+    JoltPhysicsSystem system,
+    JoltBodyID bodyID1, JoltBodyID bodyID2,
+    JoltPathConstraintPath path,
+    float pathPosX, float pathPosY, float pathPosZ,
+    float pathRotX, float pathRotY, float pathRotZ, float pathRotW,
+    float pathFraction,
+    JoltPathRotationConstraintType rotationConstraintType,
+    float maxFrictionForce);
+
+// Swap in a new path without recreating the constraint.
+void JoltPathConstraintSetPath(JoltConstraint constraint,
+                                JoltPathConstraintPath path, float pathFraction);
+
+// Read the current fraction of body2 along the path.
+float JoltPathConstraintGetPathFraction(JoltConstraint constraint);
+
+// Friction control (force clamp when motor is off).
+void JoltPathConstraintSetMaxFrictionForce(JoltConstraint constraint, float force);
+float JoltPathConstraintGetMaxFrictionForce(JoltConstraint constraint);
+
+// Position motor drives body2 along the path (Velocity or Position mode).
+void JoltPathConstraintSetPositionMotorState(JoltConstraint constraint, JoltMotorState state);
+int JoltPathConstraintGetPositionMotorState(JoltConstraint constraint);
+void JoltPathConstraintSetTargetVelocity(JoltConstraint constraint, float velocity);
+float JoltPathConstraintGetTargetVelocity(JoltConstraint constraint);
+void JoltPathConstraintSetTargetPathFraction(JoltConstraint constraint, float fraction);
+float JoltPathConstraintGetTargetPathFraction(JoltConstraint constraint);
+
+// Configure motor spring/limits.
+void JoltPathConstraintSetPositionMotorSettings(JoltConstraint constraint,
+                                                 float frequency, float damping,
+                                                 float forceLimit, float torqueLimit);
+
+// Force readback
+float JoltPathConstraintGetTotalLambdaMotor(JoltConstraint constraint);
+float JoltPathConstraintGetTotalLambdaPositionLimits(JoltConstraint constraint);
 
 // --- Buoyancy (Body-level API) ---
 
