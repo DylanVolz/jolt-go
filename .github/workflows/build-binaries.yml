@@ -1,23 +1,30 @@
 name: Build and Test Binaries
 
+env:
+  DEFAULT_JOLT_VERSION: v5.5.0
+
 on:
   push:
     tags:
       - 'v*'  # Trigger on version tags (e.g., v0.1.0)
     paths:
       - 'jolt/**'
+      - 'example/**'
+      - 'examples/**'
       - 'scripts/**'
       - '.github/workflows/build-binaries.yml'
   pull_request:
     paths:
       - 'jolt/**'
+      - 'example/**'
+      - 'examples/**'
       - 'scripts/**'
   workflow_dispatch:  # Manual trigger
     inputs:
       jolt_version:
         description: 'Jolt Physics version/commit to build (e.g., v5.4.0, latest, or commit hash)'
         required: false
-        default: 'latest'
+        default: 'v5.5.0'
 
 jobs:
   build-darwin-arm64:
@@ -30,14 +37,14 @@ jobs:
         run: |
           git clone https://github.com/jrouwe/JoltPhysics.git
           cd JoltPhysics
-          if [ "${{ github.event.inputs.jolt_version }}" != "latest" ] && [ -n "${{ github.event.inputs.jolt_version }}" ]; then
-            git checkout ${{ github.event.inputs.jolt_version }}
-          fi
+          JOLT_VERSION_INPUT="${{ github.event.inputs.jolt_version }}"
+          JOLT_VERSION="${JOLT_VERSION_INPUT:-${DEFAULT_JOLT_VERSION}}"
+          git checkout "$JOLT_VERSION"
           echo "Building Jolt Physics:"
           git log -1 --oneline
-          JOLT_VERSION=$(git describe --tags --always || echo "unknown")
-          echo "JOLT_VERSION=$JOLT_VERSION" >> $GITHUB_ENV
-          echo "Jolt version: $JOLT_VERSION"
+          RESOLVED_JOLT_VERSION=$(git describe --tags --always || echo "unknown")
+          echo "JOLT_VERSION=$RESOLVED_JOLT_VERSION" >> $GITHUB_ENV
+          echo "Jolt version: $RESOLVED_JOLT_VERSION"
 
       - name: Build darwin/arm64 binaries
         run: |
@@ -64,14 +71,14 @@ jobs:
         run: |
           git clone https://github.com/jrouwe/JoltPhysics.git
           cd JoltPhysics
-          if [ "${{ github.event.inputs.jolt_version }}" != "latest" ] && [ -n "${{ github.event.inputs.jolt_version }}" ]; then
-            git checkout ${{ github.event.inputs.jolt_version }}
-          fi
+          JOLT_VERSION_INPUT="${{ github.event.inputs.jolt_version }}"
+          JOLT_VERSION="${JOLT_VERSION_INPUT:-${DEFAULT_JOLT_VERSION}}"
+          git checkout "$JOLT_VERSION"
           echo "Building Jolt Physics:"
           git log -1 --oneline
-          JOLT_VERSION=$(git describe --tags --always || echo "unknown")
-          echo "JOLT_VERSION=$JOLT_VERSION" >> $GITHUB_ENV
-          echo "Jolt version: $JOLT_VERSION"
+          RESOLVED_JOLT_VERSION=$(git describe --tags --always || echo "unknown")
+          echo "JOLT_VERSION=$RESOLVED_JOLT_VERSION" >> $GITHUB_ENV
+          echo "Jolt version: $RESOLVED_JOLT_VERSION"
 
       - name: Build linux/amd64 binaries
         run: |
@@ -98,14 +105,14 @@ jobs:
         run: |
           git clone https://github.com/jrouwe/JoltPhysics.git
           cd JoltPhysics
-          if [ "${{ github.event.inputs.jolt_version }}" != "latest" ] && [ -n "${{ github.event.inputs.jolt_version }}" ]; then
-            git checkout ${{ github.event.inputs.jolt_version }}
-          fi
+          JOLT_VERSION_INPUT="${{ github.event.inputs.jolt_version }}"
+          JOLT_VERSION="${JOLT_VERSION_INPUT:-${DEFAULT_JOLT_VERSION}}"
+          git checkout "$JOLT_VERSION"
           echo "Building Jolt Physics:"
           git log -1 --oneline
-          JOLT_VERSION=$(git describe --tags --always || echo "unknown")
-          echo "JOLT_VERSION=$JOLT_VERSION" >> $GITHUB_ENV
-          echo "Jolt version: $JOLT_VERSION"
+          RESOLVED_JOLT_VERSION=$(git describe --tags --always || echo "unknown")
+          echo "JOLT_VERSION=$RESOLVED_JOLT_VERSION" >> $GITHUB_ENV
+          echo "Jolt version: $RESOLVED_JOLT_VERSION"
 
       - name: Build linux/arm64 binaries
         run: |
@@ -152,6 +159,5 @@ jobs:
           name: ${{ matrix.artifact }}
           path: jolt/lib/${{ matrix.lib_path }}/
 
-      - name: Test example
-        run: go run example/main.go
-
+      - name: Run example smoke suite
+        run: ./scripts/run-examples.sh
