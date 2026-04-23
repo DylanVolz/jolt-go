@@ -6,11 +6,15 @@ on:
       - 'v*'  # Trigger on version tags (e.g., v0.1.0)
     paths:
       - 'jolt/**'
+      - 'example/**'
+      - 'examples/**'
       - 'scripts/**'
       - '.github/workflows/build-binaries.yml'
   pull_request:
     paths:
       - 'jolt/**'
+      - 'example/**'
+      - 'examples/**'
       - 'scripts/**'
   workflow_dispatch:  # Manual trigger
     inputs:
@@ -152,6 +156,5 @@ jobs:
           name: ${{ matrix.artifact }}
           path: jolt/lib/${{ matrix.lib_path }}/
 
-      - name: Test example
-        run: go run example/main.go
-
+      - name: Run example smoke suite
+        run: ./scripts/run-examples.sh

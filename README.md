@@ -7,12 +7,13 @@ Go bindings for [Jolt Physics](https://github.com/jrouwe/JoltPhysics), a fast an
 - Pre-built binaries - no compilation required
 - Cross-platform support (macOS ARM64, Linux x86-64, Linux ARM64)
 - Simple, idiomatic Go API
-- Built on Jolt Physics v5.4.0
+- Built on Jolt Physics v5.5.0
+- Runnable feature examples for CharacterVirtual, contact events, path constraints, soft bodies, and state recording
 
 ## Installation
 
 **Requirements:**
-- Go 1.20 or later
+- Go 1.25.3 or later
 
 ```bash
 go get github.com/bbitechnologies/jolt-go
@@ -43,12 +44,16 @@ func main() {
 
     // Create a dynamic sphere
     bi := ps.GetBodyInterface()
-    sphere := bi.CreateSphere(
-        1.0,                          // radius
+    sphereShape := jolt.CreateSphere(1.0)
+    defer sphereShape.Destroy()
+    sphere := bi.CreateBody(
+        sphereShape,
         jolt.Vec3{X: 0, Y: 20, Z: 0}, // position
-        true,                         // is dynamic
+        jolt.MotionTypeDynamic,
+        false, // not a sensor
     )
-    defer sphere.Destroy()
+    defer bi.RemoveAndDestroyBody(sphere)
+    bi.ActivateBody(sphere)
 
     // Simulate physics
     for i := 0; i < 60; i++ {
@@ -60,7 +65,21 @@ func main() {
 }
 ```
 
-See the [example](example/main.go) for a complete working demo.
+See the legacy quick-start demo in [example/main.go](example/main.go), or the focused feature examples in [examples/](examples/README.md):
+
+```bash
+go run ./examples/character_virtual
+go run ./examples/contact_events
+go run ./examples/path_constraint
+go run ./examples/soft_body_cloth
+go run ./examples/state_recorder
+```
+
+Smoke-test the full example set with:
+
+```bash
+./scripts/run-examples.sh
+```
 
 ## Supported Platforms
 

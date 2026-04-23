@@ -11,7 +11,7 @@ jolt-go ships with pre-built static libraries for:
 
 These binaries are committed to the repository in the `jolt/lib/` directory, ensuring the package works immediately with `go get`.
 
-**Current Jolt Physics Version:** v5.4.0
+**Current Jolt Physics Version:** v5.5.0
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ Binaries will be placed in:
 After building, test that everything works:
 
 ```bash
-go run example/main.go
+./scripts/run-examples.sh
 ```
 
 ## Updating Jolt Physics Version
@@ -100,8 +100,8 @@ When updating to a new Jolt Physics version:
 
 3. **Test:**
    ```bash
-   go run example/main.go
-   go test ./...  # if you have tests
+   ./scripts/run-examples.sh
+   go test ./...
    ```
 
 4. **Commit and tag the binaries:**

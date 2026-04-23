@@ -16,8 +16,10 @@ Go bindings for Jolt Physics (C++ engine). Pre-built binaries included in reposi
 - `jolt/wrapper/*.{cpp,h}` - C wrapper around Jolt C++ API (opaque pointers)
 - `jolt/lib/{platform}/` - Pre-built static libraries (libJolt.a, libjolt_wrapper.a), committed to git
 - `scripts/build-libs.sh` - Builds binaries for all platforms
+- `scripts/run-examples.sh` - Smoke-tests the legacy demo plus the focused examples
 - `scripts/docker/` - Docker build environment for Linux
-- `example/main.go` - Falling sphere demo
+- `example/main.go` - Legacy all-in-one demo / compatibility smoke test
+- `examples/*/main.go` - Focused runnable examples for newer APIs
 - `.github/workflows/build-binaries.yml` - CI/CD for building and testing
 
 ## Core Values
@@ -35,7 +37,7 @@ Go bindings for Jolt Physics (C++ engine). Pre-built binaries included in reposi
 2. Use `extern "C"` and opaque pointers in wrapper
 3. Add Go functions in appropriate `jolt/*.go` file (body, character, physics system, etc.)
 4. Rebuild binaries: `./scripts/build-libs.sh all`
-5. Test: `go run example/main.go`
+5. Test: `./scripts/run-examples.sh`
 6. Update README.md API section if adding public functions
 
 ### When Modifying C Wrapper (`jolt/wrapper/*.{cpp,h}` files)
@@ -47,7 +49,7 @@ Go bindings for Jolt Physics (C++ engine). Pre-built binaries included in reposi
 ### When Updating Jolt Physics Version
 1. Update `$JOLT_SRC` checkout to new version
 2. Rebuild: `./scripts/build-libs.sh all`
-3. Test: `go run example/main.go`
+3. Test: `./scripts/run-examples.sh`
 4. Update version number in CONTRIBUTORS.md (line 13)
 5. Update README.md if new features exposed (line 10)
 6. Commit binaries: `git add jolt/lib/ && git commit -m "Update to Jolt vX.X.X"`
@@ -63,7 +65,7 @@ Go bindings for Jolt Physics (C++ engine). Pre-built binaries included in reposi
 1. Check if feature exists in upstream Jolt Physics
 2. Add wrapper functions (keep minimal surface area)
 3. Add Go API functions (use Go idioms)
-4. Update `example/main.go` if demonstrating new capability
+4. Add or update a focused example under `examples/` when the new capability benefits from a runnable sample
 5. Update README.md Quick Start or API Overview sections
 
 ### When Fixing Bugs
@@ -81,6 +83,11 @@ Go bindings for Jolt Physics (C++ engine). Pre-built binaries included in reposi
 - Adding platform support
 - Updating Jolt Physics version (line 10)
 - Adding examples or usage patterns
+
+**examples/README.md** - Update when:
+- Adding or removing focused runnable examples
+- Renaming example directories
+- Changing the recommended smoke-test command
 
 **CONTRIBUTORS.md** - Update when:
 - Changing build process or scripts
